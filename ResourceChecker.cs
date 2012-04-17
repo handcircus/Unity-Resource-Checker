@@ -15,8 +15,9 @@ public class TextureDetails
 	public int memSizeKB;
 	public Texture texture;
 	public TextureFormat format;
-	public List<Material> FoundInMaterials=new List<Material>();
-	public List<Renderer> FoundInRenderers=new List<Renderer>();
+	public int mipMapCount;
+	public List<Object> FoundInMaterials=new List<Object>();
+	public List<Object> FoundInRenderers=new List<Object>();
 	public TextureDetails()
 	{
 		
@@ -74,24 +75,30 @@ public class ResourceChecker : EditorWindow {
 	
 	int TotalTextureMemory=0;
 	int TotalMeshVertices=0;
+	
+	bool ctrlPressed=false;
+	
+	static int MinWidth=455;
     
     [MenuItem ("Window/Resource Checker")]
     static void Init ()
 	{  
         ResourceChecker window = (ResourceChecker) EditorWindow.GetWindow (typeof (ResourceChecker));
 		window.CheckResources();
-		window.minSize=new Vector2(435,300);
+		window.minSize=new Vector2(MinWidth,300);
     }
     
     void OnGUI ()
 	{
 		if (GUILayout.Button("Refresh")) CheckResources();
-		
-		GUILayout.Label("Total materials "+ActiveMaterials.Count);
-		GUILayout.Label("Total textures "+ActiveTextures.Count+" - "+FormatSizeString(TotalTextureMemory));
-		GUILayout.Label("Total meshes "+ActiveMeshDetails.Count+" - "+TotalMeshVertices+" verts");
-		
+		GUILayout.BeginHorizontal();
+		GUILayout.Label("Materials "+ActiveMaterials.Count);
+		GUILayout.Label("Textures "+ActiveTextures.Count+" - "+FormatSizeString(TotalTextureMemory));
+		GUILayout.Label("Meshes "+ActiveMeshDetails.Count+" - "+TotalMeshVertices+" verts");
+		GUILayout.EndHorizontal();
 		ActiveInspectType=(InspectType)GUILayout.Toolbar((int)ActiveInspectType,inspectToolbarStrings);
+		
+		ctrlPressed=Event.current.control || Event.current.command;
 		
 		switch (ActiveInspectType)
 		{
@@ -129,7 +136,7 @@ public class ResourceChecker : EditorWindow {
 			case TextureFormat.DXT1:	// Compressed color texture format.
 				return 4;
 			case TextureFormat.DXT5:	// Compressed color with alpha channel texture format.
-				return 4;
+				return 8;
 			/*
 			case TextureFormat.WiiI4:	// Wii texture format.
 			case TextureFormat.WiiI8:	// Wii texture format. Intensity 8 bit.
@@ -174,7 +181,17 @@ public class ResourceChecker : EditorWindow {
 		{
 			Texture2D tTex2D=tTexture as Texture2D;
 		 	int bitsPerPixel=GetBitsPerPixel(tTex2D.format);
-			return tWidth*tHeight*bitsPerPixel/8;
+			int mipMapCount=tTex2D.mipmapCount;
+			int mipLevel=1;
+			int tSize=0;
+			while (mipLevel<=mipMapCount)
+			{
+				tSize+=tWidth*tHeight*bitsPerPixel/8;
+				tWidth=tWidth/2;
+				tHeight=tHeight/2;
+				mipLevel++;
+			}
+			return tSize;
 		}
 		
 		if (tTexture is Cubemap)
@@ -184,6 +201,32 @@ public class ResourceChecker : EditorWindow {
 			return tWidth*tHeight*6*bitsPerPixel/8;
 		}
 		return 0;
+	}
+	
+	
+	void SelectObject(Object selectedObject,bool append)
+	{
+		if (append)
+		{
+			List<Object> currentSelection=new List<Object>(Selection.objects);
+			// Allow toggle selection
+			if (currentSelection.Contains(selectedObject)) currentSelection.Remove(selectedObject);
+			else currentSelection.Add(selectedObject);
+			
+			Selection.objects=currentSelection.ToArray();
+		}
+		else Selection.activeObject=selectedObject;
+	}
+	
+	void SelectObjects(List<Object> selectedObjects,bool append)
+	{
+		if (append)
+		{
+			List<Object> currentSelection=new List<Object>(Selection.objects);
+			currentSelection.AddRange(selectedObjects);
+			Selection.objects=currentSelection.ToArray();
+		}
+		else Selection.objects=selectedObjects.ToArray();
 	}
 	
 	void ListTextures()
@@ -198,30 +241,43 @@ public class ResourceChecker : EditorWindow {
 			
 			if(GUILayout.Button(tDetails.texture.name,GUILayout.Width(150)))
 			{
-				Selection.activeObject=tDetails.texture;
+				SelectObject(tDetails.texture,ctrlPressed);
 			}
 			
 			string sizeLabel=""+tDetails.texture.width+"x"+tDetails.texture.height;
 			if (tDetails.isCubeMap) sizeLabel+="x6";
+			sizeLabel+=" - "+tDetails.mipMapCount+"mip";
 			sizeLabel+="\n"+FormatSizeString(tDetails.memSizeKB)+" - "+tDetails.format+"";
 			
-			GUILayout.Label (sizeLabel,GUILayout.Width(100));
+			GUILayout.Label (sizeLabel,GUILayout.Width(120));
 					
 			if(GUILayout.Button(tDetails.FoundInMaterials.Count+" Mat",GUILayout.Width(50)))
 			{
-				Selection.objects=tDetails.FoundInMaterials.ToArray();
+				SelectObjects(tDetails.FoundInMaterials,ctrlPressed);
 			}
 			
 			if(GUILayout.Button(tDetails.FoundInRenderers.Count+" GO",GUILayout.Width(50)))
 			{
-				List<GameObject> FoundObjects=new List<GameObject>();
+				List<Object> FoundObjects=new List<Object>();
 				foreach (Renderer renderer in tDetails.FoundInRenderers) FoundObjects.Add(renderer.gameObject);
-				Selection.objects=FoundObjects.ToArray();
+				SelectObjects(FoundObjects,ctrlPressed);
 			}
 			
 			GUILayout.EndHorizontal();	
 		}
-		EditorGUILayout.EndScrollView();		
+		if (ActiveTextures.Count>0)
+		{
+			GUILayout.BeginHorizontal ();
+			GUILayout.Box(" ",GUILayout.Width(ThumbnailWidth),GUILayout.Height(ThumbnailHeight));
+			
+			if(GUILayout.Button("Select All",GUILayout.Width(150)))
+			{
+				List<Object> AllTextures=new List<Object>();
+				foreach (TextureDetails tDetails in ActiveTextures) AllTextures.Add(tDetails.texture);
+				SelectObjects(AllTextures,ctrlPressed);
+			}
+			EditorGUILayout.EndScrollView();
+		}
     }
 	
 	void ListMaterials()
@@ -234,22 +290,22 @@ public class ResourceChecker : EditorWindow {
 			{
 				GUILayout.BeginHorizontal ();
 				
-					if (tDetails.material.mainTexture!=null) GUILayout.Box(tDetails.material.mainTexture, GUILayout.Width(ThumbnailWidth), GUILayout.Height(ThumbnailHeight));
+				if (tDetails.material.mainTexture!=null) GUILayout.Box(tDetails.material.mainTexture, GUILayout.Width(ThumbnailWidth), GUILayout.Height(ThumbnailHeight));
 				else	
 				{
 					GUILayout.Box("n/a",GUILayout.Width(ThumbnailWidth),GUILayout.Height(ThumbnailHeight));
 				}
 				
 				if(GUILayout.Button(tDetails.material.name,GUILayout.Width(150)))
-				{
-					Selection.activeObject=tDetails.material;
+				{;
+					SelectObject(tDetails.material,ctrlPressed);
 				}
 				
 				if(GUILayout.Button(tDetails.FoundInRenderers.Count+" GO",GUILayout.Width(50)))
 				{
-					List<GameObject> FoundObjects=new List<GameObject>();
+					List<Object> FoundObjects=new List<Object>();
 					foreach (Renderer renderer in tDetails.FoundInRenderers) FoundObjects.Add(renderer.gameObject);
-					Selection.objects=FoundObjects.ToArray();
+					SelectObjects(FoundObjects,ctrlPressed);
 				}
 				
 				
@@ -278,7 +334,7 @@ public class ResourceChecker : EditorWindow {
 				
 				if(GUILayout.Button(tDetails.mesh.name,GUILayout.Width(150)))
 				{
-					Selection.activeObject=tDetails.mesh;
+					SelectObject(tDetails.mesh,ctrlPressed);
 				}
 				string sizeLabel=""+tDetails.mesh.vertexCount+" vert";
 				
@@ -287,9 +343,9 @@ public class ResourceChecker : EditorWindow {
 				
 				if(GUILayout.Button(tDetails.FoundInMeshFilters.Count+" GO",GUILayout.Width(50)))
 				{
-					List<GameObject> FoundObjects=new List<GameObject>();
+					List<Object> FoundObjects=new List<Object>();
 					foreach (MeshFilter meshFilter in tDetails.FoundInMeshFilters) FoundObjects.Add(meshFilter.gameObject);
-					Selection.objects=FoundObjects.ToArray();
+					SelectObjects(FoundObjects,ctrlPressed);
 				}
 				
 				
@@ -382,14 +438,22 @@ public class ResourceChecker : EditorWindow {
 						tTextureDetails.isCubeMap=tTexture is Cubemap;
 						
 						int memSize=CalculateTextureSizeBytes(tTexture);
-			
+						
 						tTextureDetails.memSizeKB=memSize/1024;
 						TextureFormat tFormat=TextureFormat.RGBA32;
-						
-						if (tTexture is Texture2D) tFormat=(tTexture as Texture2D).format;
-						if (tTexture is Cubemap) tFormat=(tTexture as Cubemap).format;
+						int tMipMapCount=1;
+						if (tTexture is Texture2D)
+						{
+							tFormat=(tTexture as Texture2D).format;
+							tMipMapCount=(tTexture as Texture2D).mipmapCount;
+						}
+						if (tTexture is Cubemap)
+						{
+							tFormat=(tTexture as Cubemap).format;
+						}
 				
 						tTextureDetails.format=tFormat;
+						tTextureDetails.mipMapCount=tMipMapCount;
 						ActiveTextures.Add(tTextureDetails);
 					}
 					tTextureDetails.FoundInMaterials.Add(tMaterial);
