@@ -276,8 +276,9 @@ public class ResourceChecker : EditorWindow {
 				foreach (TextureDetails tDetails in ActiveTextures) AllTextures.Add(tDetails.texture);
 				SelectObjects(AllTextures,ctrlPressed);
 			}
-			EditorGUILayout.EndScrollView();
+			EditorGUILayout.EndHorizontal();
 		}
+		EditorGUILayout.EndScrollView();
     }
 	
 	void ListMaterials()
