@@ -43,6 +43,7 @@ public class MeshDetails
 	public Mesh mesh;
 
 	public List<MeshFilter> FoundInMeshFilters=new List<MeshFilter>();
+	public List<SkinnedMeshRenderer> FoundInSkinnedMeshRenderer=new List<SkinnedMeshRenderer>();
 
 	public MeshDetails()
 	{
@@ -342,10 +343,17 @@ public class ResourceChecker : EditorWindow {
 				GUILayout.Label (sizeLabel,GUILayout.Width(100));
 				
 				
-				if(GUILayout.Button(tDetails.FoundInMeshFilters.Count+" GO",GUILayout.Width(50)))
+				if(GUILayout.Button(tDetails.FoundInMeshFilters.Count + " GO",GUILayout.Width(50)))
 				{
 					List<Object> FoundObjects=new List<Object>();
 					foreach (MeshFilter meshFilter in tDetails.FoundInMeshFilters) FoundObjects.Add(meshFilter.gameObject);
+					SelectObjects(FoundObjects,ctrlPressed);
+				}
+				
+				if(GUILayout.Button(tDetails.FoundInSkinnedMeshRenderer.Count + " GO",GUILayout.Width(50)))
+				{
+					List<Object> FoundObjects=new List<Object>();
+					foreach (SkinnedMeshRenderer skinnedMeshRenderer in tDetails.FoundInSkinnedMeshRenderer) FoundObjects.Add(skinnedMeshRenderer.gameObject);
 					SelectObjects(FoundObjects,ctrlPressed);
 				}
 				
@@ -482,6 +490,24 @@ public class ResourceChecker : EditorWindow {
 					ActiveMeshDetails.Add(tMeshDetails);
 				}
 				tMeshDetails.FoundInMeshFilters.Add(tMeshFilter);
+			}
+		}
+		
+		SkinnedMeshRenderer[] skinnedMeshRenderers = (SkinnedMeshRenderer[]) FindObjectsOfType(typeof(SkinnedMeshRenderer));
+		
+		foreach (SkinnedMeshRenderer tSkinnedMeshRenderer in skinnedMeshRenderers)
+		{
+			Mesh tMesh=tSkinnedMeshRenderer.sharedMesh;
+			if (tMesh!=null)
+			{
+				MeshDetails tMeshDetails=FindMeshDetails(tMesh);
+				if (tMeshDetails==null)
+				{
+					tMeshDetails=new MeshDetails();
+					tMeshDetails.mesh=tMesh;
+					ActiveMeshDetails.Add(tMeshDetails);
+				}
+				tMeshDetails.FoundInSkinnedMeshRenderer.Add(tSkinnedMeshRenderer);
 			}
 		}
 		
