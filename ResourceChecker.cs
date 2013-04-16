@@ -299,10 +299,13 @@ public class ResourceChecker : EditorWindow {
 				}
 				
 				if(GUILayout.Button(tDetails.material.name,GUILayout.Width(150)))
-				{;
+				{
 					SelectObject(tDetails.material,ctrlPressed);
 				}
 				
+				string shaderLabel = tDetails.material.shader != null ? tDetails.material.shader.name : "no shader";
+				GUILayout.Label (shaderLabel, GUILayout.Width(200));
+
 				if(GUILayout.Button(tDetails.FoundInRenderers.Count+" GO",GUILayout.Width(50)))
 				{
 					List<Object> FoundObjects=new List<Object>();
