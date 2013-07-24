@@ -126,6 +126,8 @@ public class ResourceChecker : EditorWindow {
 				return 8;
 			case TextureFormat.ARGB4444: //	 A 16 bits/pixel texture format. Texture stores color with an alpha channel.
 				return 16;
+			case TextureFormat.RGBA4444: //	 A 16 bits/pixel texture format.
+				return 16;
 			case TextureFormat.RGB24:	// A color texture format.
 				return 24;
 			case TextureFormat.RGBA32:	//Color with an alpha channel texture format.
