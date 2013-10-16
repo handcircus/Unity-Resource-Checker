@@ -4,6 +4,7 @@
 // This comes with no warranty, use at your own risk!
 // https://github.com/handcircus/Unity-Resource-Checker
 
+using System.Linq;
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
@@ -439,43 +440,22 @@ public class ResourceChecker : EditorWindow {
 		foreach (MaterialDetails tMaterialDetails in ActiveMaterials)
 		{
 			Material tMaterial=tMaterialDetails.material;
-			foreach (Object obj in EditorUtility.CollectDependencies(new UnityEngine.Object[] {tMaterial}))
+			var dependencies = EditorUtility.CollectDependencies(new UnityEngine.Object[] {tMaterial});
+			foreach (Object obj in dependencies)
 		    {
 				if (obj is Texture)
 				{
 					Texture tTexture=obj as Texture;
-					TextureDetails tTextureDetails=FindTextureDetails(tTexture);
-					if (tTextureDetails==null)
-					{
-						tTextureDetails=new TextureDetails();
-						tTextureDetails.texture=tTexture;
-						tTextureDetails.isCubeMap=tTexture is Cubemap;
-						
-						int memSize=CalculateTextureSizeBytes(tTexture);
-						
-						tTextureDetails.memSizeKB=memSize/1024;
-						TextureFormat tFormat=TextureFormat.RGBA32;
-						int tMipMapCount=1;
-						if (tTexture is Texture2D)
-						{
-							tFormat=(tTexture as Texture2D).format;
-							tMipMapCount=(tTexture as Texture2D).mipmapCount;
-						}
-						if (tTexture is Cubemap)
-						{
-							tFormat=(tTexture as Cubemap).format;
-						}
-				
-						tTextureDetails.format=tFormat;
-						tTextureDetails.mipMapCount=tMipMapCount;
-						ActiveTextures.Add(tTextureDetails);
-					}
-					tTextureDetails.FoundInMaterials.Add(tMaterial);
-					foreach (Renderer renderer in tMaterialDetails.FoundInRenderers)
-					{
-						if (!tTextureDetails.FoundInRenderers.Contains(	renderer)) tTextureDetails.FoundInRenderers.Add(renderer);
-					}
+					var tTextureDetail = GetTextureDetail(tTexture, tMaterial, tMaterialDetails);
+					ActiveTextures.Add(tTextureDetail);
 				}
+		    }
+
+			//if the texture was downloaded, it won't be included in the editor dependencies
+			if (tMaterial.mainTexture != null && !dependencies.Contains(tMaterial.mainTexture))
+			{
+				var tTextureDetail = GetTextureDetail(tMaterial.mainTexture, tMaterial, tMaterialDetails);
+				ActiveTextures.Add(tTextureDetail);
 			}
 		}
 		
@@ -528,6 +508,41 @@ public class ResourceChecker : EditorWindow {
 		ActiveMeshDetails.Sort(delegate(MeshDetails details1, MeshDetails details2) {return details2.mesh.vertexCount-details1.mesh.vertexCount;});
 		
 	}
-	
+
+	private TextureDetails GetTextureDetail(Texture tTexture, Material tMaterial, MaterialDetails tMaterialDetails)
+	{
+		TextureDetails tTextureDetails = FindTextureDetails(tTexture);
+		if (tTextureDetails == null)
+		{
+			tTextureDetails = new TextureDetails();
+			tTextureDetails.texture = tTexture;
+			tTextureDetails.isCubeMap = tTexture is Cubemap;
+
+			int memSize = CalculateTextureSizeBytes(tTexture);
+
+			tTextureDetails.memSizeKB = memSize / 1024;
+			TextureFormat tFormat = TextureFormat.RGBA32;
+			int tMipMapCount = 1;
+			if (tTexture is Texture2D)
+			{
+				tFormat = (tTexture as Texture2D).format;
+				tMipMapCount = (tTexture as Texture2D).mipmapCount;
+			}
+			if (tTexture is Cubemap)
+			{
+				tFormat = (tTexture as Cubemap).format;
+			}
+
+			tTextureDetails.format = tFormat;
+			tTextureDetails.mipMapCount = tMipMapCount;
+			
+		}
+		tTextureDetails.FoundInMaterials.Add(tMaterial);
+		foreach (Renderer renderer in tMaterialDetails.FoundInRenderers)
+		{
+			if (!tTextureDetails.FoundInRenderers.Contains(renderer)) tTextureDetails.FoundInRenderers.Add(renderer);
+		}
+		return tTextureDetails;
+	}
 	
 }
