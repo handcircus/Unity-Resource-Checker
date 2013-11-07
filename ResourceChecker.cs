@@ -238,36 +238,39 @@ public class ResourceChecker : EditorWindow {
 		textureListScrollPos = EditorGUILayout.BeginScrollView(textureListScrollPos);
 		
 		foreach (TextureDetails tDetails in ActiveTextures)
-		{			
-			
-			GUILayout.BeginHorizontal ();
-			GUILayout.Box(tDetails.texture, GUILayout.Width(ThumbnailWidth), GUILayout.Height(ThumbnailHeight));
-			
-			if(GUILayout.Button(tDetails.texture.name,GUILayout.Width(150)))
+		{
+
+			if (tDetails.texture != null)
 			{
-				SelectObject(tDetails.texture,ctrlPressed);
+				GUILayout.BeginHorizontal();
+				GUILayout.Box(tDetails.texture, GUILayout.Width(ThumbnailWidth), GUILayout.Height(ThumbnailHeight));
+
+				if (GUILayout.Button(tDetails.texture.name, GUILayout.Width(150)))
+				{
+					SelectObject(tDetails.texture, ctrlPressed);
+				}
+
+				string sizeLabel = "" + tDetails.texture.width + "x" + tDetails.texture.height;
+				if (tDetails.isCubeMap) sizeLabel += "x6";
+				sizeLabel += " - " + tDetails.mipMapCount + "mip";
+				sizeLabel += "\n" + FormatSizeString(tDetails.memSizeKB) + " - " + tDetails.format + "";
+
+				GUILayout.Label(sizeLabel, GUILayout.Width(120));
+
+				if (GUILayout.Button(tDetails.FoundInMaterials.Count + " Mat", GUILayout.Width(50)))
+				{
+					SelectObjects(tDetails.FoundInMaterials, ctrlPressed);
+				}
+
+				if (GUILayout.Button(tDetails.FoundInRenderers.Count + " GO", GUILayout.Width(50)))
+				{
+					List<Object> FoundObjects = new List<Object>();
+					foreach (Renderer renderer in tDetails.FoundInRenderers) FoundObjects.Add(renderer.gameObject);
+					SelectObjects(FoundObjects, ctrlPressed);
+				}
+
+				GUILayout.EndHorizontal();
 			}
-			
-			string sizeLabel=""+tDetails.texture.width+"x"+tDetails.texture.height;
-			if (tDetails.isCubeMap) sizeLabel+="x6";
-			sizeLabel+=" - "+tDetails.mipMapCount+"mip";
-			sizeLabel+="\n"+FormatSizeString(tDetails.memSizeKB)+" - "+tDetails.format+"";
-			
-			GUILayout.Label (sizeLabel,GUILayout.Width(120));
-					
-			if(GUILayout.Button(tDetails.FoundInMaterials.Count+" Mat",GUILayout.Width(50)))
-			{
-				SelectObjects(tDetails.FoundInMaterials,ctrlPressed);
-			}
-			
-			if(GUILayout.Button(tDetails.FoundInRenderers.Count+" GO",GUILayout.Width(50)))
-			{
-				List<Object> FoundObjects=new List<Object>();
-				foreach (Renderer renderer in tDetails.FoundInRenderers) FoundObjects.Add(renderer.gameObject);
-				SelectObjects(FoundObjects,ctrlPressed);
-			}
-			
-			GUILayout.EndHorizontal();	
 		}
 		if (ActiveTextures.Count>0)
 		{
