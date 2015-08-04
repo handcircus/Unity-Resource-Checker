@@ -1,5 +1,6 @@
 // Resource Checker
 // (c) 2012 Simon Oliver / HandCircus / hello@handcircus.com
+// (c) 2015 Brice Clocher / Mangatome / hello@mangatome.net
 // Public domain, do with whatever you like, commercial or not
 // This comes with no warranty, use at your own risk!
 // https://github.com/handcircus/Unity-Resource-Checker
@@ -8,7 +9,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
-
+using System.Reflection;
 
 public class TextureDetails
 {
@@ -19,6 +20,8 @@ public class TextureDetails
 	public int mipMapCount;
 	public List<Object> FoundInMaterials=new List<Object>();
 	public List<Object> FoundInRenderers=new List<Object>();
+	public List<Object> FoundInAnimators = new List<Object>();
+	public List<Object> FoundInScripts = new List<Object>();
 	public TextureDetails()
 	{
 		
@@ -61,6 +64,10 @@ public class ResourceChecker : EditorWindow {
 	{
 		Textures,Materials,Meshes
 	};
+
+	bool IncludeDisabledObjects=false;
+	bool IncludeSpriteAnimations=true;
+	bool IncludeScriptReferences=true;
 	
 	InspectType ActiveInspectType=InspectType.Textures;
 	
@@ -92,6 +99,9 @@ public class ResourceChecker : EditorWindow {
     
     void OnGUI ()
 	{
+		IncludeDisabledObjects = GUILayout.Toggle(IncludeDisabledObjects, "Include disabled and internal objects");
+		IncludeSpriteAnimations = GUILayout.Toggle(IncludeSpriteAnimations, "Look in sprite animations");
+		IncludeScriptReferences = GUILayout.Toggle(IncludeScriptReferences, "Look in behavior fields");
 		if (GUILayout.Button("Refresh")) CheckResources();
 		GUILayout.BeginHorizontal();
 		GUILayout.Label("Materials "+ActiveMaterials.Count);
@@ -168,10 +178,12 @@ public class ResourceChecker : EditorWindow {
 				return 8;
 			case TextureFormat.BGRA32://	 Format returned by iPhone camera
 				return 32;
+#if !UNITY_5
 			case TextureFormat.ATF_RGB_DXT1://	 Flash-specific RGB DXT1 compressed color texture format.
 			case TextureFormat.ATF_RGBA_JPG://	 Flash-specific RGBA JPG-compressed color texture format.
 			case TextureFormat.ATF_RGB_JPG://	 Flash-specific RGB JPG-compressed color texture format.
-				return 0; //Not supported yet
+				return 0; //Not supported yet  
+#endif
 		}
 		return 0;
 	}
@@ -259,12 +271,14 @@ public class ResourceChecker : EditorWindow {
 			{
 				SelectObjects(tDetails.FoundInMaterials,ctrlPressed);
 			}
-			
-			if(GUILayout.Button(tDetails.FoundInRenderers.Count+" GO",GUILayout.Width(50)))
+
+			HashSet<Object> FoundObjects = new HashSet<Object>();
+			foreach (Renderer renderer in tDetails.FoundInRenderers) FoundObjects.Add(renderer.gameObject);
+			foreach (Animator animator in tDetails.FoundInAnimators) FoundObjects.Add(animator.gameObject);
+			foreach (MonoBehaviour script in tDetails.FoundInScripts) FoundObjects.Add(script.gameObject);
+			if (GUILayout.Button(FoundObjects.Count+" GO",GUILayout.Width(50)))
 			{
-				List<Object> FoundObjects=new List<Object>();
-				foreach (Renderer renderer in tDetails.FoundInRenderers) FoundObjects.Add(renderer.gameObject);
-				SelectObjects(FoundObjects,ctrlPressed);
+				SelectObjects(new List<Object>(FoundObjects),ctrlPressed);
 			}
 			
 			GUILayout.EndHorizontal();	
@@ -410,106 +424,260 @@ public class ResourceChecker : EditorWindow {
 		return null;
 		
 	}
-		
-	
+
+
 	void CheckResources()
 	{
 		ActiveTextures.Clear();
 		ActiveMaterials.Clear();
 		ActiveMeshDetails.Clear();
-		
-		Renderer[] renderers = (Renderer[]) FindObjectsOfType(typeof(Renderer));
+
+		Renderer[] renderers = FindObjects<Renderer>();
+
 		//Debug.Log("Total renderers "+renderers.Length);
 		foreach (Renderer renderer in renderers)
 		{
 			//Debug.Log("Renderer is "+renderer.name);
 			foreach (Material material in renderer.sharedMaterials)
 			{
-				
-				MaterialDetails tMaterialDetails=FindMaterialDetails(material);
-				if (tMaterialDetails==null)
+
+				MaterialDetails tMaterialDetails = FindMaterialDetails(material);
+				if (tMaterialDetails == null)
 				{
-					tMaterialDetails=new MaterialDetails();
-					tMaterialDetails.material=material;
+					tMaterialDetails = new MaterialDetails();
+					tMaterialDetails.material = material;
 					ActiveMaterials.Add(tMaterialDetails);
 				}
 				tMaterialDetails.FoundInRenderers.Add(renderer);
 			}
-		}
-		
-		foreach (MaterialDetails tMaterialDetails in ActiveMaterials)
-		{
-			Material tMaterial=tMaterialDetails.material;
-			var dependencies = EditorUtility.CollectDependencies(new UnityEngine.Object[] {tMaterial});
-			foreach (Object obj in dependencies)
-		    {
-				if (obj is Texture)
-				{
-					Texture tTexture=obj as Texture;
-					var tTextureDetail = GetTextureDetail(tTexture, tMaterial, tMaterialDetails);
-					ActiveTextures.Add(tTextureDetail);
-				}
-		    }
 
-			//if the texture was downloaded, it won't be included in the editor dependencies
-			if (tMaterial.mainTexture != null && !dependencies.Contains(tMaterial.mainTexture))
+			if (renderer is SpriteRenderer)
 			{
-				var tTextureDetail = GetTextureDetail(tMaterial.mainTexture, tMaterial, tMaterialDetails);
-				ActiveTextures.Add(tTextureDetail);
+				SpriteRenderer tSpriteRenderer = (SpriteRenderer)renderer;
+
+				if (tSpriteRenderer.sprite != null)
+				{
+					var tSpriteTextureDetail = GetTextureDetail(tSpriteRenderer.sprite.texture, renderer);
+					if (!ActiveTextures.Contains(tSpriteTextureDetail))
+					{
+						ActiveTextures.Add(tSpriteTextureDetail);
+					}
+				}
 			}
 		}
-		
-		
-		MeshFilter[] meshFilters = (MeshFilter[]) FindObjectsOfType(typeof(MeshFilter));
-		
+
+		foreach (MaterialDetails tMaterialDetails in ActiveMaterials)
+		{
+			Material tMaterial = tMaterialDetails.material;
+			if (tMaterial != null)
+			{
+				var dependencies = EditorUtility.CollectDependencies(new UnityEngine.Object[] { tMaterial });
+				foreach (Object obj in dependencies)
+				{
+					if (obj is Texture)
+					{
+						Texture tTexture = obj as Texture;
+						var tTextureDetail = GetTextureDetail(tTexture, tMaterial, tMaterialDetails);
+						ActiveTextures.Add(tTextureDetail);
+					}
+				}
+
+				//if the texture was downloaded, it won't be included in the editor dependencies
+				if (tMaterial.mainTexture != null && !dependencies.Contains(tMaterial.mainTexture))
+				{
+					var tTextureDetail = GetTextureDetail(tMaterial.mainTexture, tMaterial, tMaterialDetails);
+					ActiveTextures.Add(tTextureDetail);
+				}
+			}
+		}
+
+
+		MeshFilter[] meshFilters = FindObjects<MeshFilter>();
+
 		foreach (MeshFilter tMeshFilter in meshFilters)
 		{
-			Mesh tMesh=tMeshFilter.sharedMesh;
-			if (tMesh!=null)
+			Mesh tMesh = tMeshFilter.sharedMesh;
+			if (tMesh != null)
 			{
-				MeshDetails tMeshDetails=FindMeshDetails(tMesh);
-				if (tMeshDetails==null)
+				MeshDetails tMeshDetails = FindMeshDetails(tMesh);
+				if (tMeshDetails == null)
 				{
-					tMeshDetails=new MeshDetails();
-					tMeshDetails.mesh=tMesh;
+					tMeshDetails = new MeshDetails();
+					tMeshDetails.mesh = tMesh;
 					ActiveMeshDetails.Add(tMeshDetails);
 				}
 				tMeshDetails.FoundInMeshFilters.Add(tMeshFilter);
 			}
 		}
-		
-		SkinnedMeshRenderer[] skinnedMeshRenderers = (SkinnedMeshRenderer[]) FindObjectsOfType(typeof(SkinnedMeshRenderer));
-		
+
+		SkinnedMeshRenderer[] skinnedMeshRenderers = FindObjects<SkinnedMeshRenderer>();
+
 		foreach (SkinnedMeshRenderer tSkinnedMeshRenderer in skinnedMeshRenderers)
 		{
-			Mesh tMesh=tSkinnedMeshRenderer.sharedMesh;
-			if (tMesh!=null)
+			Mesh tMesh = tSkinnedMeshRenderer.sharedMesh;
+			if (tMesh != null)
 			{
-				MeshDetails tMeshDetails=FindMeshDetails(tMesh);
-				if (tMeshDetails==null)
+				MeshDetails tMeshDetails = FindMeshDetails(tMesh);
+				if (tMeshDetails == null)
 				{
-					tMeshDetails=new MeshDetails();
-					tMeshDetails.mesh=tMesh;
+					tMeshDetails = new MeshDetails();
+					tMeshDetails.mesh = tMesh;
 					ActiveMeshDetails.Add(tMeshDetails);
 				}
 				tMeshDetails.FoundInSkinnedMeshRenderer.Add(tSkinnedMeshRenderer);
 			}
 		}
-		
-	
-		TotalTextureMemory=0;
-		foreach (TextureDetails tTextureDetails in ActiveTextures) TotalTextureMemory+=tTextureDetails.memSizeKB;
-		
-		TotalMeshVertices=0;
-		foreach (MeshDetails tMeshDetails in ActiveMeshDetails) TotalMeshVertices+=tMeshDetails.mesh.vertexCount;
-		
+
+		if (IncludeSpriteAnimations)
+		{
+			Animator[] animators = FindObjects<Animator>();
+			foreach (Animator anim in animators)
+			{
+#if UNITY_4_6 || UNITY_4_5 || UNITY_4_4 || UNITY_4_3
+				UnityEditorInternal.AnimatorController ac = anim.runtimeAnimatorController as UnityEditorInternal.AnimatorController;
+#elif UNITY_5
+                UnityEditor.Animations.AnimatorController ac = anim.runtimeAnimatorController as UnityEditor.Animations.AnimatorController;
+#endif
+
+				for (int x = 0; x < anim.layerCount; x++)
+				{
+#if UNITY_4_6 || UNITY_4_5 || UNITY_4_4 || UNITY_4_3
+					UnityEditorInternal.StateMachine sm = ac.GetLayer(x).stateMachine;
+					int cnt = sm.stateCount;
+#elif UNITY_5
+                    UnityEditor.Animations.AnimatorStateMachine sm = ac.layers[x].stateMachine;
+                    int cnt = sm.states.Length;
+#endif
+
+					for (int i = 0; i < cnt; i++)
+					{
+#if UNITY_4_6 || UNITY_4_5 || UNITY_4_4 || UNITY_4_3
+						UnityEditorInternal.State state = sm.GetState(i);
+						Motion m = state.GetMotion();
+#elif UNITY_5
+                        UnityEditor.Animations.AnimatorState state = sm.states[i].state;
+                        Motion m = state.motion;
+#endif
+						if (m != null)
+						{
+							AnimationClip clip = m as AnimationClip;
+
+							EditorCurveBinding[] ecbs = AnimationUtility.GetObjectReferenceCurveBindings(clip);
+
+							foreach (EditorCurveBinding ecb in ecbs)
+							{
+								if (ecb.propertyName == "m_Sprite")
+								{
+									foreach (ObjectReferenceKeyframe keyframe in AnimationUtility.GetObjectReferenceCurve(clip, ecb))
+									{
+										Sprite tSprite = keyframe.value as Sprite;
+
+										if (tSprite != null)
+										{
+											var tTextureDetail = GetTextureDetail(tSprite.texture, anim);
+											if (!ActiveTextures.Contains(tTextureDetail))
+											{
+												ActiveTextures.Add(tTextureDetail);
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+
+			}
+		}
+
+		if (IncludeScriptReferences)
+		{
+			MonoBehaviour[] scripts = FindObjects<MonoBehaviour>();
+			foreach (MonoBehaviour script in scripts)
+			{
+				BindingFlags flags = BindingFlags.Public | BindingFlags.Instance; // only public non-static fields are bound to by Unity.
+				FieldInfo[] fields = script.GetType().GetFields(flags);
+
+				foreach (FieldInfo field in fields)
+				{
+					System.Type fieldType = field.FieldType;
+					if (fieldType == typeof(Sprite))
+					{
+						Sprite tSprite = field.GetValue(script) as Sprite;
+						if (tSprite != null)
+						{
+							var tSpriteTextureDetail = GetTextureDetail(tSprite.texture, script);
+							if (!ActiveTextures.Contains(tSpriteTextureDetail))
+							{
+								ActiveTextures.Add(tSpriteTextureDetail);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		TotalTextureMemory = 0;
+		foreach (TextureDetails tTextureDetails in ActiveTextures) TotalTextureMemory += tTextureDetails.memSizeKB;
+
+		TotalMeshVertices = 0;
+		foreach (MeshDetails tMeshDetails in ActiveMeshDetails) TotalMeshVertices += tMeshDetails.mesh.vertexCount;
+
 		// Sort by size, descending
-		ActiveTextures.Sort(delegate(TextureDetails details1, TextureDetails details2) {return details2.memSizeKB-details1.memSizeKB;});
-		ActiveMeshDetails.Sort(delegate(MeshDetails details1, MeshDetails details2) {return details2.mesh.vertexCount-details1.mesh.vertexCount;});
-		
+		ActiveTextures.Sort(delegate(TextureDetails details1, TextureDetails details2) { return details2.memSizeKB - details1.memSizeKB; });
+		ActiveMeshDetails.Sort(delegate(MeshDetails details1, MeshDetails details2) { return details2.mesh.vertexCount - details1.mesh.vertexCount; });
+
+	}
+
+	private T[] FindObjects<T>() where T : Object
+	{
+		if (IncludeDisabledObjects)
+		{
+			return Resources.FindObjectsOfTypeAll<T>();
+		}
+		else
+		{
+			return (T[])FindObjectsOfType(typeof(T));
+		}
 	}
 
 	private TextureDetails GetTextureDetail(Texture tTexture, Material tMaterial, MaterialDetails tMaterialDetails)
+	{
+		TextureDetails tTextureDetails = GetTextureDetail(tTexture);
+
+		tTextureDetails.FoundInMaterials.Add(tMaterial);
+		foreach (Renderer renderer in tMaterialDetails.FoundInRenderers)
+		{
+			if (!tTextureDetails.FoundInRenderers.Contains(renderer)) tTextureDetails.FoundInRenderers.Add(renderer);
+		}
+		return tTextureDetails;
+	}
+
+	private TextureDetails GetTextureDetail(Texture tTexture, Renderer renderer)
+	{
+		TextureDetails tTextureDetails = GetTextureDetail(tTexture);
+
+		tTextureDetails.FoundInRenderers.Add(renderer);
+		return tTextureDetails;
+	}
+
+	private TextureDetails GetTextureDetail(Texture tTexture, Animator animator)
+	{
+		TextureDetails tTextureDetails = GetTextureDetail(tTexture);
+
+		tTextureDetails.FoundInAnimators.Add(animator);
+		return tTextureDetails;
+	}
+
+	private TextureDetails GetTextureDetail(Texture tTexture, MonoBehaviour script)
+	{
+		TextureDetails tTextureDetails = GetTextureDetail(tTexture);
+
+		tTextureDetails.FoundInScripts.Add(script);
+		return tTextureDetails;
+	}
+
+	private TextureDetails GetTextureDetail(Texture tTexture)
 	{
 		TextureDetails tTextureDetails = FindTextureDetails(tTexture);
 		if (tTextureDetails == null)
@@ -535,13 +703,9 @@ public class ResourceChecker : EditorWindow {
 
 			tTextureDetails.format = tFormat;
 			tTextureDetails.mipMapCount = tMipMapCount;
-			
+
 		}
-		tTextureDetails.FoundInMaterials.Add(tMaterial);
-		foreach (Renderer renderer in tMaterialDetails.FoundInRenderers)
-		{
-			if (!tTextureDetails.FoundInRenderers.Contains(renderer)) tTextureDetails.FoundInRenderers.Add(renderer);
-		}
+
 		return tTextureDetails;
 	}
 	
