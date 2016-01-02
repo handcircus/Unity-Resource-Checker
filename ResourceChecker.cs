@@ -7,7 +7,9 @@
 
 using System.Linq;
 using UnityEngine;
+#if UNITY_5 || UNITY_4_7 || UNITY_4_6
 using UnityEngine.UI;
+#endif
 using UnityEditor;
 using System.Collections.Generic;
 using System.Reflection;
@@ -23,7 +25,9 @@ public class TextureDetails
 	public List<Object> FoundInRenderers=new List<Object>();
 	public List<Object> FoundInAnimators = new List<Object>();
 	public List<Object> FoundInScripts = new List<Object>();
+    #if UNITY_5 || UNITY_4_7 || UNITY_4_6
 	public List<Object> FoundInGraphics = new List<Object>();
+    #endif
 	public TextureDetails()
 	{
 
@@ -36,7 +40,9 @@ public class MaterialDetails
 	public Material material;
 
 	public List<Renderer> FoundInRenderers=new List<Renderer>();
+    #if UNITY_5 || UNITY_4_7 || UNITY_4_6
 	public List<Graphic> FoundInGraphics=new List<Graphic>();
+    #endif
 
 	public MaterialDetails()
 	{
@@ -156,13 +162,17 @@ public class ResourceChecker : EditorWindow {
 			obj.FoundInMaterials.RemoveAll(x => !x);
 			obj.FoundInRenderers.RemoveAll(x => !x);
 			obj.FoundInScripts.RemoveAll(x => !x);
+            #if UNITY_5 || UNITY_4_7 || UNITY_4_6
 			obj.FoundInGraphics.RemoveAll(x => !x);
+            #endif
 		});
 
 		ActiveMaterials.RemoveAll(x => !x.material);
 		ActiveMaterials.ForEach(delegate(MaterialDetails obj) {
 			obj.FoundInRenderers.RemoveAll(x => !x);
+            #if UNITY_5 || UNITY_4_7 || UNITY_4_6
 			obj.FoundInGraphics.RemoveAll(x => !x);
+            #endif
 		});
 
 		ActiveMeshDetails.RemoveAll(x => !x.mesh);
@@ -324,7 +334,9 @@ public class ResourceChecker : EditorWindow {
 			HashSet<Object> FoundObjects = new HashSet<Object>();
 			foreach (Renderer renderer in tDetails.FoundInRenderers) FoundObjects.Add(renderer.gameObject);
 			foreach (Animator animator in tDetails.FoundInAnimators) FoundObjects.Add(animator.gameObject);
+            #if UNITY_5 || UNITY_4_7 || UNITY_4_6
 			foreach (Graphic graphic in tDetails.FoundInGraphics) FoundObjects.Add(graphic.gameObject);
+            #endif
 			foreach (MonoBehaviour script in tDetails.FoundInScripts) FoundObjects.Add(script.gameObject);
 			if (GUILayout.Button(FoundObjects.Count+" GO",GUILayout.Width(50)))
 			{
@@ -377,7 +389,9 @@ public class ResourceChecker : EditorWindow {
 				{
 					List<Object> FoundObjects=new List<Object>();
 					foreach (Renderer renderer in tDetails.FoundInRenderers) FoundObjects.Add(renderer.gameObject);
+                    #if UNITY_5 || UNITY_4_7 || UNITY_4_6
 					foreach (Graphic graphic in tDetails.FoundInGraphics) FoundObjects.Add(graphic.gameObject);
+                    #endif
 					SelectObjects(FoundObjects,ctrlPressed);
 				}
 
@@ -760,6 +774,7 @@ public class ResourceChecker : EditorWindow {
 		return tTextureDetails;
 	}
 
+    #if UNITY_5 || UNITY_4_7 || UNITY_4_6
 	private TextureDetails GetTextureDetail(Texture tTexture, Graphic graphic)
 	{
 		TextureDetails tTextureDetails = GetTextureDetail(tTexture);
@@ -767,6 +782,7 @@ public class ResourceChecker : EditorWindow {
 		tTextureDetails.FoundInGraphics.Add(graphic);
 		return tTextureDetails;
 	}
+    #endif
 
 	private TextureDetails GetTextureDetail(Texture tTexture, MonoBehaviour script)
 	{
