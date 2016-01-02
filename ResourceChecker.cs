@@ -108,7 +108,9 @@ public class ResourceChecker : EditorWindow {
 		IncludeDisabledObjects = GUILayout.Toggle(IncludeDisabledObjects, "Include disabled and internal objects");
 		IncludeSpriteAnimations = GUILayout.Toggle(IncludeSpriteAnimations, "Look in sprite animations");
 		IncludeScriptReferences = GUILayout.Toggle(IncludeScriptReferences, "Look in behavior fields");
+        #if UNITY_5 || UNITY_4_7 || UNITY_4_6
 		IncludeGuiElements = GUILayout.Toggle(IncludeGuiElements, "Look in GUI elements");
+        #endif
 		if (GUILayout.Button("Refresh")) CheckResources();
 
 		RemoveDestroyedResources();
@@ -515,6 +517,7 @@ public class ResourceChecker : EditorWindow {
 			}
 		}
 
+        #if UNITY_5 || UNITY_4_7 || UNITY_4_6
 		if (IncludeGuiElements)
 		{
 			Graphic[] graphics = FindObjects<Graphic>();
@@ -543,6 +546,7 @@ public class ResourceChecker : EditorWindow {
 				}
 			}
 		}
+        #endif
 
 		foreach (MaterialDetails tMaterialDetails in ActiveMaterials)
 		{
@@ -611,19 +615,23 @@ public class ResourceChecker : EditorWindow {
 			Animator[] animators = FindObjects<Animator>();
 			foreach (Animator anim in animators)
 			{
-				#if UNITY_4_6 || UNITY_4_5 || UNITY_4_4 || UNITY_4_3
+				#if UNITY_4_7 || UNITY_4_6 || UNITY_4_5 || UNITY_4_4 || UNITY_4_3
 				UnityEditorInternal.AnimatorController ac = anim.runtimeAnimatorController as UnityEditorInternal.AnimatorController;
 				#elif UNITY_5
 				UnityEditor.Animations.AnimatorController ac = anim.runtimeAnimatorController as UnityEditor.Animations.AnimatorController;
 				#endif
 
 				//Skip animators without layers, this can happen if they don't have an animator controller.
-				if (!ac || ac.layers == null || ac.layers.Length == 0)
+                #if UNITY_4_7 || UNITY_4_6 || UNITY_4_5 || UNITY_4_4 || UNITY_4_3
+                if (ac == null)
+				#elif UNITY_5
+				if (ac == null || ac.layers == null || ac.layers.Length == 0)
+				#endif
 					continue;
 
 				for (int x = 0; x < anim.layerCount; x++)
 				{
-					#if UNITY_4_6 || UNITY_4_5 || UNITY_4_4 || UNITY_4_3
+					#if UNITY_4_7 || UNITY_4_6 || UNITY_4_5 || UNITY_4_4 || UNITY_4_3
 					UnityEditorInternal.StateMachine sm = ac.GetLayer(x).stateMachine;
 					int cnt = sm.stateCount;
 					#elif UNITY_5
@@ -633,7 +641,7 @@ public class ResourceChecker : EditorWindow {
 
 					for (int i = 0; i < cnt; i++)
 					{
-						#if UNITY_4_6 || UNITY_4_5 || UNITY_4_4 || UNITY_4_3
+						#if UNITY_4_7 || UNITY_4_6 || UNITY_4_5 || UNITY_4_4 || UNITY_4_3
 						UnityEditorInternal.State state = sm.GetState(i);
 						Motion m = state.GetMotion();
 						#elif UNITY_5
