@@ -556,7 +556,10 @@ public class ResourceChecker : EditorWindow {
 					{
 						Texture tTexture = obj as Texture;
 						var tTextureDetail = GetTextureDetail(tTexture, tMaterial, tMaterialDetails);
-						ActiveTextures.Add(tTextureDetail);
+                        if( !ActiveTextures.Contains(tTextureDetail) )
+                        {
+                            ActiveTextures.Add(tTextureDetail);
+                        }
 					}
 				}
 
@@ -564,7 +567,10 @@ public class ResourceChecker : EditorWindow {
 				if (tMaterial.mainTexture != null && !dependencies.Contains(tMaterial.mainTexture))
 				{
 					var tTextureDetail = GetTextureDetail(tMaterial.mainTexture, tMaterial, tMaterialDetails);
-					ActiveTextures.Add(tTextureDetail);
+                    if( !ActiveTextures.Contains(tTextureDetail) )
+                    {
+                        ActiveTextures.Add(tTextureDetail);
+                    }
 				}
 			}
 		}
