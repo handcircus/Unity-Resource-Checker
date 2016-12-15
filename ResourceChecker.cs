@@ -5,14 +5,16 @@
 // This comes with no warranty, use at your own risk!
 // https://github.com/handcircus/Unity-Resource-Checker
 
+using System;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEditor;
 using System.Collections.Generic;
 using System.Reflection;
+using Object = UnityEngine.Object;
 
-public class TextureDetails
+public class TextureDetails : IEquatable<TextureDetails>
 {
 	public bool isCubeMap;
 	public int memSizeKB;
@@ -28,6 +30,22 @@ public class TextureDetails
 	{
 
 	}
+
+    public bool Equals(TextureDetails other)
+    {
+        return texture != null && other.texture != null &&
+			texture.GetNativeTexturePtr() == other.texture.GetNativeTexturePtr();
+    }
+
+    public override int GetHashCode()
+    {
+		return (int)texture.GetNativeTexturePtr();
+    }
+
+    public override bool Equals(object obj)
+    {
+        return Equals(obj as TextureDetails);
+    }
 };
 
 public class MaterialDetails
@@ -37,10 +55,11 @@ public class MaterialDetails
 
 	public List<Renderer> FoundInRenderers=new List<Renderer>();
 	public List<Graphic> FoundInGraphics=new List<Graphic>();
+	public bool instance;
 
 	public MaterialDetails()
 	{
-
+		instance = false;
 	}
 };
 
@@ -51,10 +70,11 @@ public class MeshDetails
 
 	public List<MeshFilter> FoundInMeshFilters=new List<MeshFilter>();
 	public List<SkinnedMeshRenderer> FoundInSkinnedMeshRenderer=new List<SkinnedMeshRenderer>();
+	public bool instance;
 
 	public MeshDetails()
 	{
-
+		instance = false;
 	}
 };
 
@@ -68,7 +88,7 @@ public class ResourceChecker : EditorWindow {
 		Textures,Materials,Meshes
 	};
 
-	bool IncludeDisabledObjects=false;
+	bool IncludeDisabledObjects=true;
 	bool IncludeSpriteAnimations=true;
 	bool IncludeScriptReferences=true;
 	bool IncludeGuiElements=true;
@@ -91,7 +111,7 @@ public class ResourceChecker : EditorWindow {
 
 	bool ctrlPressed=false;
 
-	static int MinWidth=455;
+	static int MinWidth=475;
 
 	bool collectedInPlayingMode;
 
@@ -100,22 +120,31 @@ public class ResourceChecker : EditorWindow {
 	{  
 		ResourceChecker window = (ResourceChecker) EditorWindow.GetWindow (typeof (ResourceChecker));
 		window.CheckResources();
-		window.minSize=new Vector2(MinWidth,300);
+		window.minSize=new Vector2(MinWidth,475);
 	}
 
 	void OnGUI ()
 	{
-		IncludeDisabledObjects = GUILayout.Toggle(IncludeDisabledObjects, "Include disabled and internal objects");
-		IncludeSpriteAnimations = GUILayout.Toggle(IncludeSpriteAnimations, "Look in sprite animations");
-		IncludeScriptReferences = GUILayout.Toggle(IncludeScriptReferences, "Look in behavior fields");
-		IncludeGuiElements = GUILayout.Toggle(IncludeGuiElements, "Look in GUI elements");
-		if (GUILayout.Button("Refresh")) CheckResources();
+
+		IncludeDisabledObjects = GUILayout.Toggle(IncludeDisabledObjects, "Include disabled objects", GUILayout.Width(300));
+		IncludeSpriteAnimations = GUILayout.Toggle(IncludeSpriteAnimations, "Look in sprite animations", GUILayout.Width(300));
+		GUI.color = new Color (0.8f, 0.8f, 1.0f, 1.0f);
+		IncludeScriptReferences = GUILayout.Toggle(IncludeScriptReferences, "Look in behavior fields", GUILayout.Width(300));
+		GUI.color = new Color (1.0f, 1.0f, 1.0f, 1.0f);
+		IncludeGuiElements = GUILayout.Toggle(IncludeGuiElements, "Look in GUI elements", GUILayout.Width(300));
+		GUILayout.BeginArea(new Rect(position.width-85,5,100,65));
+		if (GUILayout.Button("Calculate",GUILayout.Width(80), GUILayout.Height(40)))
+			CheckResources();
+		if (GUILayout.Button("CleanUp",GUILayout.Width(80), GUILayout.Height(20)))
+			Resources.UnloadUnusedAssets();
+		GUILayout.EndArea();
+		EditorGUILayout.Space();
 
 		RemoveDestroyedResources();
 
 		GUILayout.BeginHorizontal();
-		GUILayout.Label("Materials "+ActiveMaterials.Count);
 		GUILayout.Label("Textures "+ActiveTextures.Count+" - "+FormatSizeString(TotalTextureMemory));
+		GUILayout.Label("Materials "+ActiveMaterials.Count);
 		GUILayout.Label("Meshes "+ActiveMeshDetails.Count+" - "+TotalMeshVertices+" verts");
 		GUILayout.EndHorizontal();
 		ActiveInspectType=(InspectType)GUILayout.Toolbar((int)ActiveInspectType,inspectToolbarStrings);
@@ -256,12 +285,26 @@ public class ResourceChecker : EditorWindow {
 			}
 			return tSize;
 		}
-
-		if (tTexture is Cubemap)
+		if (tTexture is Texture2DArray)
 		{
-			Cubemap tCubemap=tTexture as Cubemap;
-			int bitsPerPixel=GetBitsPerPixel(tCubemap.format);
-			return tWidth*tHeight*6*bitsPerPixel/8;
+			Texture2DArray tTex2D=tTexture as Texture2DArray;
+			int bitsPerPixel=GetBitsPerPixel(tTex2D.format);
+			int mipMapCount=10;
+			int mipLevel=1;
+			int tSize=0;
+			while (mipLevel<=mipMapCount)
+			{
+				tSize+=tWidth*tHeight*bitsPerPixel/8;
+				tWidth=tWidth/2;
+				tHeight=tHeight/2;
+				mipLevel++;
+			}
+			return tSize*((Texture2DArray)tTex2D).depth;
+		}
+		if (tTexture is Cubemap) {
+			Cubemap tCubemap = tTexture as Cubemap;
+			int bitsPerPixel = GetBitsPerPixel (tCubemap.format);
+			return tWidth * tHeight * 6 * bitsPerPixel / 8;
 		}
 		return 0;
 	}
@@ -300,7 +343,12 @@ public class ResourceChecker : EditorWindow {
 		{			
 
 			GUILayout.BeginHorizontal ();
-			GUILayout.Box(tDetails.texture, GUILayout.Width(ThumbnailWidth), GUILayout.Height(ThumbnailHeight));
+			Texture tex = new Texture();
+			tex = tDetails.texture;
+			if(tDetails.texture.GetType() == typeof(Texture2DArray) || tDetails.texture.GetType() == typeof(Cubemap)){
+				tex = AssetPreview.GetMiniThumbnail(tDetails.texture);
+			}
+			GUILayout.Box(tex, GUILayout.Width(ThumbnailWidth), GUILayout.Height(ThumbnailHeight));
 
 			if(GUILayout.Button(tDetails.texture.name,GUILayout.Width(150)))
 			{
@@ -309,8 +357,9 @@ public class ResourceChecker : EditorWindow {
 
 			string sizeLabel=""+tDetails.texture.width+"x"+tDetails.texture.height;
 			if (tDetails.isCubeMap) sizeLabel+="x6";
-			sizeLabel+=" - "+tDetails.mipMapCount+"mip";
-			sizeLabel+="\n"+FormatSizeString(tDetails.memSizeKB)+" - "+tDetails.format+"";
+			if (tDetails.texture.GetType () == typeof(Texture2DArray))
+				sizeLabel+= "[]\n" + ((Texture2DArray)tDetails.texture).depth+"depths";
+			sizeLabel+=" - "+tDetails.mipMapCount+"mip\n"+FormatSizeString(tDetails.memSizeKB)+" - "+tDetails.format;
 
 			GUILayout.Label (sizeLabel,GUILayout.Width(120));
 
@@ -333,10 +382,10 @@ public class ResourceChecker : EditorWindow {
 		}
 		if (ActiveTextures.Count>0)
 		{
+			EditorGUILayout.Space();
 			GUILayout.BeginHorizontal ();
-			GUILayout.Box(" ",GUILayout.Width(ThumbnailWidth),GUILayout.Height(ThumbnailHeight));
-
-			if(GUILayout.Button("Select All",GUILayout.Width(150)))
+			//GUILayout.Box(" ",GUILayout.Width(ThumbnailWidth),GUILayout.Height(ThumbnailHeight));
+			if(GUILayout.Button("Select \n All",GUILayout.Width(ThumbnailWidth*2)))
 			{
 				List<Object> AllTextures=new List<Object>();
 				foreach (TextureDetails tDetails in ActiveTextures) AllTextures.Add(tDetails.texture);
@@ -357,16 +406,15 @@ public class ResourceChecker : EditorWindow {
 			{
 				GUILayout.BeginHorizontal ();
 
-				if (tDetails.material.mainTexture!=null) GUILayout.Box(tDetails.material.mainTexture, GUILayout.Width(ThumbnailWidth), GUILayout.Height(ThumbnailHeight));
-				else	
-				{
-					GUILayout.Box("n/a",GUILayout.Width(ThumbnailWidth),GUILayout.Height(ThumbnailHeight));
-				}
+				GUILayout.Box(AssetPreview.GetAssetPreview(tDetails.material), GUILayout.Width(ThumbnailWidth), GUILayout.Height(ThumbnailHeight));
 
+				if (tDetails.instance == true)
+					GUI.color = new Color (0.8f, 0.8f, 1.0f, 1.0f);
 				if(GUILayout.Button(tDetails.material.name,GUILayout.Width(150)))
 				{
 					SelectObject(tDetails.material,ctrlPressed);
 				}
+				GUI.color = new Color (1.0f, 1.0f, 1.0f, 1.0f);
 
 				string shaderLabel = tDetails.material.shader != null ? tDetails.material.shader.name : "no shader";
 				GUILayout.Label (shaderLabel, GUILayout.Width(200));
@@ -395,18 +443,16 @@ public class ResourceChecker : EditorWindow {
 			if (tDetails.mesh!=null)
 			{
 				GUILayout.BeginHorizontal ();
-				/*
-				if (tDetails.material.mainTexture!=null) GUILayout.Box(tDetails.material.mainTexture, GUILayout.Width(ThumbnailWidth), GUILayout.Height(ThumbnailHeight));
-				else	
-				{
-					GUILayout.Box("n/a",GUILayout.Width(ThumbnailWidth),GUILayout.Height(ThumbnailHeight));
-				}
-				*/
-
-				if(GUILayout.Button(tDetails.mesh.name,GUILayout.Width(150)))
+				string name = tDetails.mesh.name;
+				if (name == null || name.Count() < 1)
+					name = tDetails.FoundInMeshFilters[0].gameObject.name;
+				if (tDetails.instance == true)
+					GUI.color = new Color (0.8f, 0.8f, 1.0f, 1.0f);
+				if(GUILayout.Button(name,GUILayout.Width(150)))
 				{
 					SelectObject(tDetails.mesh,ctrlPressed);
 				}
+				GUI.color = new Color (1.0f,1.0f,1.0f,1.0f);
 				string sizeLabel=""+tDetails.mesh.vertexCount+" vert";
 
 				GUILayout.Label (sizeLabel,GUILayout.Width(100));
@@ -419,7 +465,7 @@ public class ResourceChecker : EditorWindow {
 					SelectObjects(FoundObjects,ctrlPressed);
 				}
 
-				if(GUILayout.Button(tDetails.FoundInSkinnedMeshRenderer.Count + " GO",GUILayout.Width(50)))
+				if(GUILayout.Button(tDetails.FoundInSkinnedMeshRenderer.Count + " skinned mesh GO",GUILayout.Width(140)))
 				{
 					List<Object> FoundObjects=new List<Object>();
 					foreach (SkinnedMeshRenderer skinnedMeshRenderer in tDetails.FoundInSkinnedMeshRenderer) FoundObjects.Add(skinnedMeshRenderer.gameObject);
@@ -482,6 +528,10 @@ public class ResourceChecker : EditorWindow {
 		ActiveMeshDetails.Clear();
 
 		Renderer[] renderers = FindObjects<Renderer>();
+
+		MaterialDetails skyMat = new MaterialDetails ();
+		skyMat.material = RenderSettings.skybox;
+		ActiveMaterials.Add (skyMat);
 
 		//Debug.Log("Total renderers "+renderers.Length);
 		foreach (Renderer renderer in renderers)
@@ -556,21 +606,16 @@ public class ResourceChecker : EditorWindow {
 					{
 						Texture tTexture = obj as Texture;
 						var tTextureDetail = GetTextureDetail(tTexture, tMaterial, tMaterialDetails);
-                        if( !ActiveTextures.Contains(tTextureDetail) )
-                        {
-                            ActiveTextures.Add(tTextureDetail);
-                        }
+						ActiveTextures.Add(tTextureDetail);
 					}
 				}
 
 				//if the texture was downloaded, it won't be included in the editor dependencies
-				if (tMaterial.mainTexture != null && !dependencies.Contains(tMaterial.mainTexture))
-				{
-					var tTextureDetail = GetTextureDetail(tMaterial.mainTexture, tMaterial, tMaterialDetails);
-                    if( !ActiveTextures.Contains(tTextureDetail) )
-                    {
-                        ActiveTextures.Add(tTextureDetail);
-                    }
+				if (tMaterial.HasProperty ("_MainTex")) {
+					if (tMaterial.mainTexture != null && !dependencies.Contains (tMaterial.mainTexture)) {
+						var tTextureDetail = GetTextureDetail (tMaterial.mainTexture, tMaterial, tMaterialDetails);
+						ActiveTextures.Add (tTextureDetail);
+					}
 				}
 			}
 		}
@@ -646,31 +691,34 @@ public class ResourceChecker : EditorWindow {
 						UnityEditor.Animations.AnimatorState state = sm.states[i].state;
 						Motion m = state.motion;
 						#endif
-						if (m != null)
+                        if (m != null)
 						{
 							AnimationClip clip = m as AnimationClip;
 
-							EditorCurveBinding[] ecbs = AnimationUtility.GetObjectReferenceCurveBindings(clip);
+						    if (clip != null)
+						    {
+						        EditorCurveBinding[] ecbs = AnimationUtility.GetObjectReferenceCurveBindings(clip);
 
-							foreach (EditorCurveBinding ecb in ecbs)
-							{
-								if (ecb.propertyName == "m_Sprite")
-								{
-									foreach (ObjectReferenceKeyframe keyframe in AnimationUtility.GetObjectReferenceCurve(clip, ecb))
-									{
-										Sprite tSprite = keyframe.value as Sprite;
+						        foreach (EditorCurveBinding ecb in ecbs)
+						        {
+						            if (ecb.propertyName == "m_Sprite")
+						            {
+						                foreach (ObjectReferenceKeyframe keyframe in AnimationUtility.GetObjectReferenceCurve(clip, ecb))
+						                {
+						                    Sprite tSprite = keyframe.value as Sprite;
 
-										if (tSprite != null)
-										{
-											var tTextureDetail = GetTextureDetail(tSprite.texture, anim);
-											if (!ActiveTextures.Contains(tTextureDetail))
-											{
-												ActiveTextures.Add(tTextureDetail);
-											}
-										}
-									}
-								}
-							}
+						                    if (tSprite != null)
+						                    {
+						                        var tTextureDetail = GetTextureDetail(tSprite.texture, anim);
+						                        if (!ActiveTextures.Contains(tTextureDetail))
+						                        {
+						                            ActiveTextures.Add(tTextureDetail);
+						                        }
+						                    }
+						                }
+						            }
+						        }
+						    }
 						}
 					}
 				}
@@ -700,6 +748,54 @@ public class ResourceChecker : EditorWindow {
 								ActiveTextures.Add(tSpriteTextureDetail);
 							}
 						}
+					}if (fieldType == typeof(Mesh))
+					{
+						Mesh tMesh = field.GetValue(script) as Mesh;
+						if (tMesh != null)
+						{
+							MeshDetails tMeshDetails = FindMeshDetails(tMesh);
+							if (tMeshDetails == null)
+							{
+								tMeshDetails = new MeshDetails();
+								tMeshDetails.mesh = tMesh;
+								tMeshDetails.instance = true;
+								ActiveMeshDetails.Add(tMeshDetails);
+							}
+						}
+					}if (fieldType == typeof(Material))
+					{
+						Material tMaterial = field.GetValue(script) as Material;
+						if (tMaterial != null)
+						{
+							MaterialDetails tMatDetails = FindMaterialDetails(tMaterial);
+							if (tMatDetails == null)
+							{
+								tMatDetails = new MaterialDetails();
+								tMatDetails.instance = true;
+								tMatDetails.material = tMaterial;
+								if(!ActiveMaterials.Contains(tMatDetails))
+									ActiveMaterials.Add(tMatDetails);
+							}
+							if (tMaterial.mainTexture)
+							{
+								var tSpriteTextureDetail = GetTextureDetail(tMaterial.mainTexture);
+								if (!ActiveTextures.Contains(tSpriteTextureDetail))
+								{
+									ActiveTextures.Add(tSpriteTextureDetail);
+								}
+							}
+							var dependencies = EditorUtility.CollectDependencies(new UnityEngine.Object[] { tMaterial });
+							foreach (Object obj in dependencies)
+							{
+								if (obj is Texture)
+								{
+									Texture tTexture = obj as Texture;
+									var tTextureDetail = GetTextureDetail(tTexture, tMaterial, tMatDetails);
+									if(!ActiveTextures.Contains(tTextureDetail))
+										ActiveTextures.Add(tTextureDetail);
+								}
+							}
+						}
 					}
 				}
 			}
@@ -713,6 +809,7 @@ public class ResourceChecker : EditorWindow {
 
 		// Sort by size, descending
 		ActiveTextures.Sort(delegate(TextureDetails details1, TextureDetails details2) { return details2.memSizeKB - details1.memSizeKB; });
+	    ActiveTextures = ActiveTextures.Distinct().ToList();
 		ActiveMeshDetails.Sort(delegate(MeshDetails details1, MeshDetails details2) { return details2.mesh.vertexCount - details1.mesh.vertexCount; });
 
 		collectedInPlayingMode = Application.isPlaying;
@@ -720,14 +817,20 @@ public class ResourceChecker : EditorWindow {
 
 	private T[] FindObjects<T>() where T : Object
 	{
-		if (IncludeDisabledObjects)
-		{
-			return Resources.FindObjectsOfTypeAll<T>();
+		if (IncludeDisabledObjects) {
+			List<T> meshfilters = new List<T> ();
+			GameObject[] allGo = UnityEngine.SceneManagement.SceneManager.GetActiveScene ().GetRootGameObjects ().ToArray ();
+			foreach (GameObject go in allGo) {
+				Transform[] tgo = go.GetComponentsInChildren<Transform> (true).ToArray ();
+				foreach (Transform tr in tgo) {
+					if (tr.GetComponent<T> ())
+						meshfilters.Add (tr.GetComponent<T> ());
+				}
+			}
+			return (T[])meshfilters.ToArray ();
 		}
 		else
-		{
 			return (T[])FindObjectsOfType(typeof(T));
-		}
 	}
 
 	private TextureDetails GetTextureDetail(Texture tTexture, Material tMaterial, MaterialDetails tMaterialDetails)
@@ -785,7 +888,6 @@ public class ResourceChecker : EditorWindow {
 
 			int memSize = CalculateTextureSizeBytes(tTexture);
 
-			tTextureDetails.memSizeKB = memSize / 1024;
 			TextureFormat tFormat = TextureFormat.RGBA32;
 			int tMipMapCount = 1;
 			if (tTexture is Texture2D)
@@ -796,8 +898,14 @@ public class ResourceChecker : EditorWindow {
 			if (tTexture is Cubemap)
 			{
 				tFormat = (tTexture as Cubemap).format;
+				memSize = 8 * tTexture.height * tTexture.width;
+			}
+			if(tTexture is Texture2DArray){
+				tFormat = (tTexture as Texture2DArray).format;
+				tMipMapCount = 10;
 			}
 
+			tTextureDetails.memSizeKB = memSize / 1024;
 			tTextureDetails.format = tFormat;
 			tTextureDetails.mipMapCount = tMipMapCount;
 
