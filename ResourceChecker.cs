@@ -26,6 +26,9 @@ public class TextureDetails : IEquatable<TextureDetails>
 	public List<Object> FoundInAnimators = new List<Object>();
 	public List<Object> FoundInScripts = new List<Object>();
 	public List<Object> FoundInGraphics = new List<Object>();
+	public bool isSky;
+	public bool instance;
+	public bool isgui;
 	public TextureDetails()
 	{
 
@@ -56,10 +59,14 @@ public class MaterialDetails
 	public List<Renderer> FoundInRenderers=new List<Renderer>();
 	public List<Graphic> FoundInGraphics=new List<Graphic>();
 	public bool instance;
+	public bool isgui;
+	public bool isSky;
 
 	public MaterialDetails()
 	{
 		instance = false;
+		isgui = false;
+		isSky = false;
 	}
 };
 
@@ -78,20 +85,28 @@ public class MeshDetails
 	}
 };
 
+public class MissingGraphic{
+	public Transform Object;
+	public string type;
+	public string name;
+}
+
 public class ResourceChecker : EditorWindow {
 
 
 	string[] inspectToolbarStrings = {"Textures", "Materials","Meshes"};
+	string[] inspectToolbarStrings2 = {"Textures", "Materials","Meshes", "Missing"};
 
 	enum InspectType 
 	{
-		Textures,Materials,Meshes
+		Textures,Materials,Meshes,Missing
 	};
 
 	bool IncludeDisabledObjects=true;
 	bool IncludeSpriteAnimations=true;
 	bool IncludeScriptReferences=true;
 	bool IncludeGuiElements=true;
+	bool thingsMissing = false;
 
 	InspectType ActiveInspectType=InspectType.Textures;
 
@@ -101,10 +116,12 @@ public class ResourceChecker : EditorWindow {
 	List<TextureDetails> ActiveTextures=new List<TextureDetails>();
 	List<MaterialDetails> ActiveMaterials=new List<MaterialDetails>();
 	List<MeshDetails> ActiveMeshDetails=new List<MeshDetails>();
+	List<MissingGraphic> MissingObjects = new List<MissingGraphic> ();
 
 	Vector2 textureListScrollPos=new Vector2(0,0);
 	Vector2 materialListScrollPos=new Vector2(0,0);
 	Vector2 meshListScrollPos=new Vector2(0,0);
+	Vector2 missingListScrollPos = new Vector2 (0,0);
 
 	int TotalTextureMemory=0;
 	int TotalMeshVertices=0;
@@ -112,6 +129,7 @@ public class ResourceChecker : EditorWindow {
 	bool ctrlPressed=false;
 
 	static int MinWidth=475;
+	Color defColor;
 
 	bool collectedInPlayingMode;
 
@@ -125,29 +143,36 @@ public class ResourceChecker : EditorWindow {
 
 	void OnGUI ()
 	{
-
+		defColor = GUI.color;
 		IncludeDisabledObjects = GUILayout.Toggle(IncludeDisabledObjects, "Include disabled objects", GUILayout.Width(300));
 		IncludeSpriteAnimations = GUILayout.Toggle(IncludeSpriteAnimations, "Look in sprite animations", GUILayout.Width(300));
 		GUI.color = new Color (0.8f, 0.8f, 1.0f, 1.0f);
 		IncludeScriptReferences = GUILayout.Toggle(IncludeScriptReferences, "Look in behavior fields", GUILayout.Width(300));
-		GUI.color = new Color (1.0f, 1.0f, 1.0f, 1.0f);
+		GUI.color = new Color (1.0f, 0.95f, 0.8f, 1.0f);
 		IncludeGuiElements = GUILayout.Toggle(IncludeGuiElements, "Look in GUI elements", GUILayout.Width(300));
+		GUI.color = new Color (1.0f, 1.0f, 1.0f, 1.0f);
 		GUILayout.BeginArea(new Rect(position.width-85,5,100,65));
 		if (GUILayout.Button("Calculate",GUILayout.Width(80), GUILayout.Height(40)))
 			CheckResources();
 		if (GUILayout.Button("CleanUp",GUILayout.Width(80), GUILayout.Height(20)))
 			Resources.UnloadUnusedAssets();
 		GUILayout.EndArea();
-		EditorGUILayout.Space();
-
 		RemoveDestroyedResources();
 
+		GUILayout.Space(30);
+		if (thingsMissing == true) {
+			EditorGUI.HelpBox (new Rect(8,75,300,25),"Some GameObjects are missing graphical elements.", MessageType.Error);
+		}
 		GUILayout.BeginHorizontal();
 		GUILayout.Label("Textures "+ActiveTextures.Count+" - "+FormatSizeString(TotalTextureMemory));
 		GUILayout.Label("Materials "+ActiveMaterials.Count);
 		GUILayout.Label("Meshes "+ActiveMeshDetails.Count+" - "+TotalMeshVertices+" verts");
 		GUILayout.EndHorizontal();
-		ActiveInspectType=(InspectType)GUILayout.Toolbar((int)ActiveInspectType,inspectToolbarStrings);
+		if (thingsMissing == true) {
+			ActiveInspectType = (InspectType)GUILayout.Toolbar ((int)ActiveInspectType, inspectToolbarStrings2);
+		} else {
+			ActiveInspectType = (InspectType)GUILayout.Toolbar ((int)ActiveInspectType, inspectToolbarStrings);
+		}
 
 		ctrlPressed=Event.current.control || Event.current.command;
 
@@ -161,9 +186,10 @@ public class ResourceChecker : EditorWindow {
 			break;
 		case InspectType.Meshes:
 			ListMeshes();
-			break;	
-
-
+			break;
+		case InspectType.Missing:
+			ListMissing();
+			break;
 		}
 	}
 
@@ -174,6 +200,8 @@ public class ResourceChecker : EditorWindow {
 			ActiveTextures.Clear();
 			ActiveMaterials.Clear();
 			ActiveMeshDetails.Clear();
+			MissingObjects.Clear ();
+			thingsMissing = false;
 			collectedInPlayingMode = Application.isPlaying;
 		}
 		
@@ -350,10 +378,17 @@ public class ResourceChecker : EditorWindow {
 			}
 			GUILayout.Box(tex, GUILayout.Width(ThumbnailWidth), GUILayout.Height(ThumbnailHeight));
 
+			if (tDetails.instance == true)
+				GUI.color = new Color (0.8f, 0.8f, defColor.b, 1.0f);
+			if (tDetails.isgui == true)
+				GUI.color = new Color (defColor.r, 0.95f, 0.8f, 1.0f);
+			if (tDetails.isSky)
+				GUI.color = new Color (0.9f, defColor.g, defColor.b, 1.0f);
 			if(GUILayout.Button(tDetails.texture.name,GUILayout.Width(150)))
 			{
 				SelectObject(tDetails.texture,ctrlPressed);
 			}
+			GUI.color = defColor;
 
 			string sizeLabel=""+tDetails.texture.width+"x"+tDetails.texture.height;
 			if (tDetails.isCubeMap) sizeLabel+="x6";
@@ -409,12 +444,16 @@ public class ResourceChecker : EditorWindow {
 				GUILayout.Box(AssetPreview.GetAssetPreview(tDetails.material), GUILayout.Width(ThumbnailWidth), GUILayout.Height(ThumbnailHeight));
 
 				if (tDetails.instance == true)
-					GUI.color = new Color (0.8f, 0.8f, 1.0f, 1.0f);
+					GUI.color = new Color (0.8f, 0.8f, defColor.b, 1.0f);
+				if (tDetails.isgui == true)
+					GUI.color = new Color (defColor.r, 0.95f, 0.8f, 1.0f);
+				if (tDetails.isSky)
+					GUI.color = new Color (0.9f, defColor.g, defColor.b, 1.0f);
 				if(GUILayout.Button(tDetails.material.name,GUILayout.Width(150)))
 				{
 					SelectObject(tDetails.material,ctrlPressed);
 				}
-				GUI.color = new Color (1.0f, 1.0f, 1.0f, 1.0f);
+				GUI.color = defColor;
 
 				string shaderLabel = tDetails.material.shader != null ? tDetails.material.shader.name : "no shader";
 				GUILayout.Label (shaderLabel, GUILayout.Width(200));
@@ -447,12 +486,12 @@ public class ResourceChecker : EditorWindow {
 				if (name == null || name.Count() < 1)
 					name = tDetails.FoundInMeshFilters[0].gameObject.name;
 				if (tDetails.instance == true)
-					GUI.color = new Color (0.8f, 0.8f, 1.0f, 1.0f);
+					GUI.color = new Color (0.8f, 0.8f, defColor.b, 1.0f);
 				if(GUILayout.Button(name,GUILayout.Width(150)))
 				{
 					SelectObject(tDetails.mesh,ctrlPressed);
 				}
-				GUI.color = new Color (1.0f,1.0f,1.0f,1.0f);
+				GUI.color = defColor;
 				string sizeLabel=""+tDetails.mesh.vertexCount+" vert";
 
 				GUILayout.Label (sizeLabel,GUILayout.Width(100));
@@ -464,12 +503,17 @@ public class ResourceChecker : EditorWindow {
 					foreach (MeshFilter meshFilter in tDetails.FoundInMeshFilters) FoundObjects.Add(meshFilter.gameObject);
 					SelectObjects(FoundObjects,ctrlPressed);
 				}
-
-				if(GUILayout.Button(tDetails.FoundInSkinnedMeshRenderer.Count + " skinned mesh GO",GUILayout.Width(140)))
-				{
-					List<Object> FoundObjects=new List<Object>();
-					foreach (SkinnedMeshRenderer skinnedMeshRenderer in tDetails.FoundInSkinnedMeshRenderer) FoundObjects.Add(skinnedMeshRenderer.gameObject);
-					SelectObjects(FoundObjects,ctrlPressed);
+				if (tDetails.FoundInSkinnedMeshRenderer.Count > 0) {
+					if (GUILayout.Button (tDetails.FoundInSkinnedMeshRenderer.Count + " skinned mesh GO", GUILayout.Width (140))) {
+						List<Object> FoundObjects = new List<Object> ();
+						foreach (SkinnedMeshRenderer skinnedMeshRenderer in tDetails.FoundInSkinnedMeshRenderer)
+							FoundObjects.Add (skinnedMeshRenderer.gameObject);
+						SelectObjects (FoundObjects, ctrlPressed);
+					}
+				} else {
+					GUI.color = new Color (defColor.r, defColor.g, defColor.b, 0.5f);
+					GUILayout.Label("   0 skinned mesh");
+					GUI.color = defColor;
 				}
 
 
@@ -477,6 +521,31 @@ public class ResourceChecker : EditorWindow {
 			}
 		}
 		EditorGUILayout.EndScrollView();		
+	}
+
+	void ListMissing(){
+		missingListScrollPos = EditorGUILayout.BeginScrollView(missingListScrollPos);
+		foreach (MissingGraphic dMissing in MissingObjects) {
+			GUILayout.BeginHorizontal ();
+			if (GUILayout.Button (dMissing.name, GUILayout.Width (150)))
+				SelectObject (dMissing.Object, ctrlPressed);
+			GUILayout.Label ("missing ", GUILayout.Width(48));
+			switch (dMissing.type) {
+			case "mesh":
+				GUI.color = new Color (0.8f, 0.8f, defColor.b, 1.0f);
+				break;
+			case "sprite":
+				GUI.color = new Color (defColor.r, 0.8f, 0.8f, 1.0f);
+				break;
+			case "material":
+				GUI.color = new Color (0.8f, defColor.g, 0.8f, 1.0f);
+				break;
+			}
+			GUILayout.Label (dMissing.type);
+			GUI.color = defColor;
+			GUILayout.EndHorizontal ();
+		}
+		EditorGUILayout.EndScrollView();
 	}
 
 	string FormatSizeString(int memSizeKB)
@@ -526,11 +595,14 @@ public class ResourceChecker : EditorWindow {
 		ActiveTextures.Clear();
 		ActiveMaterials.Clear();
 		ActiveMeshDetails.Clear();
+		MissingObjects.Clear ();
+		thingsMissing = false;
 
 		Renderer[] renderers = FindObjects<Renderer>();
 
 		MaterialDetails skyMat = new MaterialDetails ();
 		skyMat.material = RenderSettings.skybox;
+		skyMat.isSky = true;
 		ActiveMaterials.Add (skyMat);
 
 		//Debug.Log("Total renderers "+renderers.Length);
@@ -554,13 +626,18 @@ public class ResourceChecker : EditorWindow {
 			{
 				SpriteRenderer tSpriteRenderer = (SpriteRenderer)renderer;
 
-				if (tSpriteRenderer.sprite != null)
-				{
-					var tSpriteTextureDetail = GetTextureDetail(tSpriteRenderer.sprite.texture, renderer);
-					if (!ActiveTextures.Contains(tSpriteTextureDetail))
-					{
-						ActiveTextures.Add(tSpriteTextureDetail);
+				if (tSpriteRenderer.sprite != null) {
+					var tSpriteTextureDetail = GetTextureDetail (tSpriteRenderer.sprite.texture, renderer);
+					if (!ActiveTextures.Contains (tSpriteTextureDetail)) {
+						ActiveTextures.Add (tSpriteTextureDetail);
 					}
+				} else if (tSpriteRenderer.sprite == null) {
+					MissingGraphic tMissing = new MissingGraphic ();
+					tMissing.Object = tSpriteRenderer.transform;
+					tMissing.type = "sprite";
+					tMissing.name = tSpriteRenderer.transform.name;
+					MissingObjects.Add (tMissing);
+					thingsMissing = true;
 				}
 			}
 		}
@@ -587,6 +664,7 @@ public class ResourceChecker : EditorWindow {
 					{
 						tMaterialDetails = new MaterialDetails();
 						tMaterialDetails.material = graphic.materialForRendering;
+						tMaterialDetails.isgui = true;
 						ActiveMaterials.Add(tMaterialDetails);
 					}
 					tMaterialDetails.FoundInGraphics.Add(graphic);
@@ -606,6 +684,9 @@ public class ResourceChecker : EditorWindow {
 					{
 						Texture tTexture = obj as Texture;
 						var tTextureDetail = GetTextureDetail(tTexture, tMaterial, tMaterialDetails);
+						tTextureDetail.isSky = tMaterialDetails.isSky;
+						tTextureDetail.instance = tMaterialDetails.instance;
+						tTextureDetail.isgui = tMaterialDetails.isgui;
 						ActiveTextures.Add(tTextureDetail);
 					}
 				}
@@ -636,6 +717,21 @@ public class ResourceChecker : EditorWindow {
 					ActiveMeshDetails.Add(tMeshDetails);
 				}
 				tMeshDetails.FoundInMeshFilters.Add(tMeshFilter);
+			} else if (tMesh == null && tMeshFilter.transform.GetComponent("TextContainer")== null) {
+				MissingGraphic tMissing = new MissingGraphic ();
+				tMissing.Object = tMeshFilter.transform;
+				tMissing.type = "mesh";
+				tMissing.name = tMeshFilter.transform.name;
+				MissingObjects.Add (tMissing);
+				thingsMissing = true;
+			}
+			if (tMeshFilter.transform.GetComponent<MeshRenderer>().sharedMaterial == null) {
+				MissingGraphic tMissing = new MissingGraphic ();
+				tMissing.Object = tMeshFilter.transform;
+				tMissing.type = "material";
+				tMissing.name = tMeshFilter.transform.name;
+				MissingObjects.Add (tMissing);
+				thingsMissing = true;
 			}
 		}
 
@@ -654,6 +750,21 @@ public class ResourceChecker : EditorWindow {
 					ActiveMeshDetails.Add(tMeshDetails);
 				}
 				tMeshDetails.FoundInSkinnedMeshRenderer.Add(tSkinnedMeshRenderer);
+			} else if (tMesh == null) {
+				MissingGraphic tMissing = new MissingGraphic ();
+				tMissing.Object = tSkinnedMeshRenderer.transform;
+				tMissing.type = "mesh";
+				tMissing.name = tSkinnedMeshRenderer.transform.name;
+				MissingObjects.Add (tMissing);
+				thingsMissing = true;
+			}
+			if (tSkinnedMeshRenderer.sharedMaterial == null) {
+				MissingGraphic tMissing = new MissingGraphic ();
+				tMissing.Object = tSkinnedMeshRenderer.transform;
+				tMissing.type = "material";
+				tMissing.name = tSkinnedMeshRenderer.transform.name;
+				MissingObjects.Add (tMissing);
+				thingsMissing = true;
 			}
 		}
 
