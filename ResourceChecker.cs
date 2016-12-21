@@ -150,7 +150,7 @@ public class ResourceChecker : EditorWindow {
 		IncludeScriptReferences = GUILayout.Toggle(IncludeScriptReferences, "Look in behavior fields", GUILayout.Width(300));
 		GUI.color = new Color (1.0f, 0.95f, 0.8f, 1.0f);
 		IncludeGuiElements = GUILayout.Toggle(IncludeGuiElements, "Look in GUI elements", GUILayout.Width(300));
-		GUI.color = new Color (1.0f, 1.0f, 1.0f, 1.0f);
+		GUI.color = defColor;
 		GUILayout.BeginArea(new Rect(position.width-85,5,100,65));
 		if (GUILayout.Button("Calculate",GUILayout.Width(80), GUILayout.Height(40)))
 			CheckResources();
