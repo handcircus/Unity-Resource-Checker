@@ -926,11 +926,24 @@ public class ResourceChecker : EditorWindow {
 		collectedInPlayingMode = Application.isPlaying;
 	}
 
+    private static GameObject[] GetAllRootGameObjects()
+    {
+#if !UNITY_5_3_OR_NEWER
+        return UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects().ToArray();
+#else
+        List<GameObject> allGo = new List<GameObject>();
+        for (int sceneIdx = 0; sceneIdx < UnityEngine.SceneManagement.SceneManager.sceneCount; ++sceneIdx){
+            allGo.AddRange( UnityEngine.SceneManagement.SceneManager.GetSceneAt(sceneIdx).GetRootGameObjects().ToArray() );
+        }
+        return allGo.ToArray();
+#endif
+    }
+
 	private T[] FindObjects<T>() where T : Object
 	{
 		if (IncludeDisabledObjects) {
 			List<T> meshfilters = new List<T> ();
-			GameObject[] allGo = UnityEngine.SceneManagement.SceneManager.GetActiveScene ().GetRootGameObjects ().ToArray ();
+			GameObject[] allGo = GetAllRootGameObjects();
 			foreach (GameObject go in allGo) {
 				Transform[] tgo = go.GetComponentsInChildren<Transform> (true).ToArray ();
 				foreach (Transform tr in tgo) {
