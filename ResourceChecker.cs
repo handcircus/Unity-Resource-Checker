@@ -133,7 +133,9 @@ public class ResourceChecker : EditorWindow {
 
 	bool collectedInPlayingMode;
 
-	[MenuItem ("Window/Resource Checker")]
+    System.Text.StringBuilder TmpSB = new System.Text.StringBuilder();
+
+    [MenuItem ("Window/Resource Checker")]
 	static void Init ()
 	{  
 		ResourceChecker window = (ResourceChecker) EditorWindow.GetWindow (typeof (ResourceChecker));
@@ -725,8 +727,10 @@ public class ResourceChecker : EditorWindow {
 				MissingObjects.Add (tMissing);
 				thingsMissing = true;
 			}
-			if (tMeshFilter.transform.GetComponent<MeshRenderer>().sharedMaterial == null) {
-				MissingGraphic tMissing = new MissingGraphic ();
+            CheckMeshFilterAndRenderComponent(tMeshFilter);
+            if (null != tMeshFilter.transform.GetComponent<MeshRenderer>() && tMeshFilter.transform.GetComponent<MeshRenderer>().sharedMaterial == null)
+            {
+                MissingGraphic tMissing = new MissingGraphic ();
 				tMissing.Object = tMeshFilter.transform;
 				tMissing.type = "material";
 				tMissing.name = tMeshFilter.transform.name;
@@ -1037,5 +1041,16 @@ public class ResourceChecker : EditorWindow {
 
 		return tTextureDetails;
 	}
+
+    private void CheckMeshFilterAndRenderComponent(MeshFilter meshFilter)
+    {
+        if (null != meshFilter && null == meshFilter.transform.GetComponent<MeshRenderer>())
+        {
+            TmpSB.Length = 0;
+            TmpSB.Append(meshFilter.transform.name);
+            TmpSB.Append(" have meshFilter without any MeshRender,please check to add MeshRender or delete MeshFilter.");
+            Debug.LogError(TmpSB.ToString());
+        }
+    }
 
 }
