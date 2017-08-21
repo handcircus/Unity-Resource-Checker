@@ -725,7 +725,10 @@ public class ResourceChecker : EditorWindow {
 				MissingObjects.Add (tMissing);
 				thingsMissing = true;
 			}
-			if (tMeshFilter.transform.GetComponent<MeshRenderer>().sharedMaterial == null) {
+
+			var meshRenderrer = tMeshFilter.transform.GetComponent<MeshRenderer>();
+				
+			if (meshRenderrer == null || meshRenderrer.sharedMaterial == null) {
 				MissingGraphic tMissing = new MissingGraphic ();
 				tMissing.Object = tMeshFilter.transform;
 				tMissing.type = "material";
