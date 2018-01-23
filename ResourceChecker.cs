@@ -26,6 +26,7 @@ public class TextureDetails : IEquatable<TextureDetails>
 	public List<Object> FoundInAnimators = new List<Object>();
 	public List<Object> FoundInScripts = new List<Object>();
 	public List<Object> FoundInGraphics = new List<Object>();
+	public List<Object> FoundInButtons = new List<Object>();
 	public bool isSky;
 	public bool instance;
 	public bool isgui;
@@ -407,6 +408,7 @@ public class ResourceChecker : EditorWindow {
 			foreach (Renderer renderer in tDetails.FoundInRenderers) FoundObjects.Add(renderer.gameObject);
 			foreach (Animator animator in tDetails.FoundInAnimators) FoundObjects.Add(animator.gameObject);
 			foreach (Graphic graphic in tDetails.FoundInGraphics) FoundObjects.Add(graphic.gameObject);
+			foreach (Button button in tDetails.FoundInButtons) FoundObjects.Add(button.gameObject);
 			foreach (MonoBehaviour script in tDetails.FoundInScripts) FoundObjects.Add(script.gameObject);
 			if (GUILayout.Button(FoundObjects.Count+" GO",GUILayout.Width(50)))
 			{
@@ -670,6 +672,14 @@ public class ResourceChecker : EditorWindow {
 					tMaterialDetails.FoundInGraphics.Add(graphic);
 				}
 			}
+
+			Button[] buttons = FindObjects<Button>();
+			foreach (Button button in buttons)
+			{
+				CheckButtonSpriteState(button, button.spriteState.disabledSprite);
+				CheckButtonSpriteState(button, button.spriteState.highlightedSprite);
+				CheckButtonSpriteState(button, button.spriteState.pressedSprite);
+			}
 		}
 
 		foreach (MaterialDetails tMaterialDetails in ActiveMaterials)
@@ -929,6 +939,18 @@ public class ResourceChecker : EditorWindow {
 		collectedInPlayingMode = Application.isPlaying;
 	}
 
+	private void CheckButtonSpriteState(Button button, Sprite sprite) 
+	{
+		if (sprite == null) return;
+		
+		var texture = sprite.texture;
+		var tButtonTextureDetail = GetTextureDetail(texture, button);
+		if (!ActiveTextures.Contains(tButtonTextureDetail))
+		{
+			ActiveTextures.Add(tButtonTextureDetail);
+		}
+	}
+	
     private static GameObject[] GetAllRootGameObjects()
     {
 #if !UNITY_5 && !UNITY_5_3_OR_NEWER
@@ -1001,6 +1023,17 @@ public class ResourceChecker : EditorWindow {
 		TextureDetails tTextureDetails = GetTextureDetail(tTexture);
 
 		tTextureDetails.FoundInScripts.Add(script);
+		return tTextureDetails;
+	}
+
+	private TextureDetails GetTextureDetail(Texture tTexture, Button button) 
+	{
+		TextureDetails tTextureDetails = GetTextureDetail(tTexture);
+
+		if (!tTextureDetails.FoundInButtons.Contains(button))
+		{
+			tTextureDetails.FoundInButtons.Add(button);
+		}
 		return tTextureDetails;
 	}
 
