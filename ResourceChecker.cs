@@ -276,11 +276,7 @@ public class ResourceChecker : EditorWindow {
 		case TextureFormat.PVRTC_RGBA4://	 PowerVR (iOS) 4 bits/pixel compressed with alpha channel texture format
 			return 4;
 		case TextureFormat.ETC_RGB4://	 ETC (GLES2.0) 4 bits/pixel compressed RGB texture format.
-			return 4;
-		case TextureFormat.ATC_RGB4://	 ATC (ATITC) 4 bits/pixel compressed RGB texture format.
-			return 4;
-		case TextureFormat.ATC_RGBA8://	 ATC (ATITC) 8 bits/pixel compressed RGB texture format.
-			return 8;
+			return 4;								
 		case TextureFormat.BGRA32://	 Format returned by iPhone camera
 			return 32;
 			#if !UNITY_5 && !UNITY_5_3_OR_NEWER
@@ -372,8 +368,7 @@ public class ResourceChecker : EditorWindow {
 		{			
 
 			GUILayout.BeginHorizontal ();
-			Texture tex = new Texture();
-			tex = tDetails.texture;
+			Texture tex =tDetails.texture;			
 			if(tDetails.texture.GetType() == typeof(Texture2DArray) || tDetails.texture.GetType() == typeof(Cubemap)){
 				tex = AssetPreview.GetMiniThumbnail(tDetails.texture);
 			}
