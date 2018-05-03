@@ -278,13 +278,7 @@ public class ResourceChecker : EditorWindow {
 		case TextureFormat.ETC_RGB4://	 ETC (GLES2.0) 4 bits/pixel compressed RGB texture format.
 			return 4;								
 		case TextureFormat.BGRA32://	 Format returned by iPhone camera
-			return 32;
-			#if !UNITY_5 && !UNITY_5_3_OR_NEWER
-			case TextureFormat.ATF_RGB_DXT1://	 Flash-specific RGB DXT1 compressed color texture format.
-			case TextureFormat.ATF_RGBA_JPG://	 Flash-specific RGBA JPG-compressed color texture format.
-			case TextureFormat.ATF_RGB_JPG://	 Flash-specific RGB JPG-compressed color texture format.
-			return 0; //Not supported yet  
-			#endif
+			return 32;			
 		}
 		return 0;
 	}
@@ -792,24 +786,14 @@ public class ResourceChecker : EditorWindow {
 					continue;
 
 				for (int x = 0; x < anim.layerCount; x++)
-				{
-					#if UNITY_4_6 || UNITY_4_5 || UNITY_4_4 || UNITY_4_3
-					UnityEditorInternal.StateMachine sm = ac.GetLayer(x).stateMachine;
-					int cnt = sm.stateCount;
-					#elif UNITY_5 || UNITY_5_3_OR_NEWER
+				{										
 					UnityEditor.Animations.AnimatorStateMachine sm = ac.layers[x].stateMachine;
 					int cnt = sm.states.Length;
-					#endif
-
+					
 					for (int i = 0; i < cnt; i++)
-					{
-						#if UNITY_4_6 || UNITY_4_5 || UNITY_4_4 || UNITY_4_3
-						UnityEditorInternal.State state = sm.GetState(i);
-						Motion m = state.GetMotion();
-						#elif UNITY_5 || UNITY_5_3_OR_NEWER
+					{												
 						UnityEditor.Animations.AnimatorState state = sm.states[i].state;
-						Motion m = state.motion;
-						#endif
+						Motion m = state.motion;						
                         if (m != null)
 						{
 							AnimationClip clip = m as AnimationClip;
