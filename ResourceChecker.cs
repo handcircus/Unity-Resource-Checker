@@ -107,6 +107,7 @@ public class ResourceChecker : EditorWindow {
 	bool IncludeSpriteAnimations=true;
 	bool IncludeScriptReferences=true;
 	bool IncludeGuiElements=true;
+	bool IncludeLightmapTextures=true;
 	bool thingsMissing = false;
 
 	InspectType ActiveInspectType=InspectType.Textures;
@@ -151,6 +152,7 @@ public class ResourceChecker : EditorWindow {
 		IncludeScriptReferences = GUILayout.Toggle(IncludeScriptReferences, "Look in behavior fields", GUILayout.Width(300));
 		GUI.color = new Color (1.0f, 0.95f, 0.8f, 1.0f);
 		IncludeGuiElements = GUILayout.Toggle(IncludeGuiElements, "Look in GUI elements", GUILayout.Width(300));
+		IncludeLightmapTextures = GUILayout.Toggle(IncludeLightmapTextures, "Look in Lightmap textures", GUILayout.Width(300));
 		GUI.color = defColor;
 		GUILayout.BeginArea(new Rect(position.width-85,5,100,65));
 		if (GUILayout.Button("Calculate",GUILayout.Width(80), GUILayout.Height(40)))
@@ -162,7 +164,7 @@ public class ResourceChecker : EditorWindow {
 
 		GUILayout.Space(30);
 		if (thingsMissing == true) {
-			EditorGUI.HelpBox (new Rect(8,75,300,25),"Some GameObjects are missing graphical elements.", MessageType.Error);
+			EditorGUI.HelpBox (new Rect(8,93,300,25),"Some GameObjects are missing graphical elements.", MessageType.Error);
 		}
 		GUILayout.BeginHorizontal();
 		GUILayout.Label("Textures "+ActiveTextures.Count+" - "+FormatSizeString(TotalTextureMemory));
@@ -637,6 +639,38 @@ public class ResourceChecker : EditorWindow {
 			}
 		}
 
+		if (IncludeLightmapTextures) {
+			LightmapData[] lightmapTextures = LightmapSettings.lightmaps;
+
+			// Unity lightmaps
+			foreach (LightmapData lightmapData in lightmapTextures)
+			{
+				if (lightmapData.lightmapColor != null) 
+				{
+					var textureDetail = GetTextureDetail (lightmapData.lightmapColor);
+					
+					if (!ActiveTextures.Contains (textureDetail)) 
+						ActiveTextures.Add (textureDetail);
+				}
+				
+				if (lightmapData.lightmapDir != null) 
+				{
+					var textureDetail = GetTextureDetail (lightmapData.lightmapColor);
+					
+					if (!ActiveTextures.Contains (textureDetail)) 
+						ActiveTextures.Add (textureDetail);
+				}
+				
+				if (lightmapData.shadowMask != null) 
+				{
+					var textureDetail = GetTextureDetail (lightmapData.shadowMask);
+					
+					if (!ActiveTextures.Contains (textureDetail)) 
+						ActiveTextures.Add (textureDetail);
+				}
+			}
+		}
+		
 		if (IncludeGuiElements)
 		{
 			Graphic[] graphics = FindObjects<Graphic>();
