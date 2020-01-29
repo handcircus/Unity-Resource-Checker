@@ -277,6 +277,10 @@ public class ResourceChecker : EditorWindow {
 			return 4;
 		case TextureFormat.ETC_RGB4://	 ETC (GLES2.0) 4 bits/pixel compressed RGB texture format.
 			return 4;								
+		case TextureFormat.ETC2_RGBA8:
+			return 8;
+		case TextureFormat.EAC_R:
+			return 4;
 		case TextureFormat.BGRA32://	 Format returned by iPhone camera
 			return 32;			
 		}
