@@ -78,6 +78,7 @@ public class MeshDetails
 
 	public List<MeshFilter> FoundInMeshFilters=new List<MeshFilter>();
 	public List<SkinnedMeshRenderer> FoundInSkinnedMeshRenderer=new List<SkinnedMeshRenderer>();
+	public List<GameObject> StaticBatchingEnabled =new List<GameObject>();
 	public bool instance;
 
 	public MeshDetails()
@@ -107,6 +108,7 @@ public class ResourceChecker : EditorWindow {
 	bool IncludeSpriteAnimations=true;
 	bool IncludeScriptReferences=true;
 	bool IncludeGuiElements=true;
+	bool IncludeLightmapTextures=true;
 	bool thingsMissing = false;
 
 	InspectType ActiveInspectType=InspectType.Textures;
@@ -151,6 +153,7 @@ public class ResourceChecker : EditorWindow {
 		IncludeScriptReferences = GUILayout.Toggle(IncludeScriptReferences, "Look in behavior fields", GUILayout.Width(300));
 		GUI.color = new Color (1.0f, 0.95f, 0.8f, 1.0f);
 		IncludeGuiElements = GUILayout.Toggle(IncludeGuiElements, "Look in GUI elements", GUILayout.Width(300));
+		IncludeLightmapTextures = GUILayout.Toggle(IncludeLightmapTextures, "Look in Lightmap textures", GUILayout.Width(300));
 		GUI.color = defColor;
 		GUILayout.BeginArea(new Rect(position.width-85,5,100,65));
 		if (GUILayout.Button("Calculate",GUILayout.Width(80), GUILayout.Height(40)))
@@ -162,7 +165,7 @@ public class ResourceChecker : EditorWindow {
 
 		GUILayout.Space(30);
 		if (thingsMissing == true) {
-			EditorGUI.HelpBox (new Rect(8,75,300,25),"Some GameObjects are missing graphical elements.", MessageType.Error);
+			EditorGUI.HelpBox (new Rect(8,93,300,25),"Some GameObjects are missing graphical elements.", MessageType.Error);
 		}
 		GUILayout.BeginHorizontal();
 		GUILayout.Label("Textures "+ActiveTextures.Count+" - "+FormatSizeString(TotalTextureMemory));
@@ -225,6 +228,7 @@ public class ResourceChecker : EditorWindow {
 		ActiveMeshDetails.ForEach(delegate(MeshDetails obj) {
 			obj.FoundInMeshFilters.RemoveAll(x => !x);
 			obj.FoundInSkinnedMeshRenderer.RemoveAll(x => !x);
+			obj.StaticBatchingEnabled.RemoveAll(x => !x);
 		});
 
 		TotalTextureMemory = 0;
@@ -277,6 +281,10 @@ public class ResourceChecker : EditorWindow {
 			return 4;
 		case TextureFormat.ETC_RGB4://	 ETC (GLES2.0) 4 bits/pixel compressed RGB texture format.
 			return 4;								
+		case TextureFormat.ETC2_RGBA8:
+			return 8;
+		case TextureFormat.EAC_R:
+			return 4;
 		case TextureFormat.BGRA32://	 Format returned by iPhone camera
 			return 32;			
 		}
@@ -457,13 +465,38 @@ public class ResourceChecker : EditorWindow {
 					SelectObjects(FoundObjects,ctrlPressed);
 				}
 
-
+				var queue = tDetails.material.renderQueue;
+				EditorGUI.BeginChangeCheck();
+				queue = EditorGUILayout.DelayedIntField(queue, GUILayout.Width(35));
+				if (EditorGUI.EndChangeCheck())
+				{
+					tDetails.material.renderQueue = queue;
+					ActiveMaterials.Sort(MaterialSorter);
+					GUIUtility.ExitGUI();
+					break;
+				}
+				
 				GUILayout.EndHorizontal();	
 			}
 		}
 		EditorGUILayout.EndScrollView();		
 	}
 
+	/// <summary>
+	/// Sort by RenderQueue
+	/// </summary>
+	static int MaterialSorter(MaterialDetails first, MaterialDetails second)
+	{
+		var firstIsNull = first.material == null;
+		var secondIsNull = second.material == null;
+		
+		if (firstIsNull && secondIsNull) return 0;
+		if (firstIsNull) return int.MaxValue;
+		if (secondIsNull) return int.MinValue;
+
+		return first.material.renderQueue - second.material.renderQueue;
+	}
+	
 	void ListMeshes()
 	{
 		meshListScrollPos = EditorGUILayout.BeginScrollView(meshListScrollPos);
@@ -504,6 +537,19 @@ public class ResourceChecker : EditorWindow {
 				} else {
 					GUI.color = new Color (defColor.r, defColor.g, defColor.b, 0.5f);
 					GUILayout.Label("   0 skinned mesh");
+					GUI.color = defColor;
+				}
+				
+				if (tDetails.StaticBatchingEnabled.Count > 0) {
+					if (GUILayout.Button (tDetails.StaticBatchingEnabled.Count + " Static Batching", GUILayout.Width (140))) {
+						List<Object> FoundObjects = new List<Object> ();
+						foreach (var obj in tDetails.StaticBatchingEnabled)
+							FoundObjects.Add (obj);
+						SelectObjects (FoundObjects, ctrlPressed);
+					}
+				} else {
+					GUI.color = new Color (defColor.r, defColor.g, defColor.b, 0.5f);
+					GUILayout.Label("   0 static batching");
 					GUI.color = defColor;
 				}
 
@@ -633,6 +679,38 @@ public class ResourceChecker : EditorWindow {
 			}
 		}
 
+		if (IncludeLightmapTextures) {
+			LightmapData[] lightmapTextures = LightmapSettings.lightmaps;
+
+			// Unity lightmaps
+			foreach (LightmapData lightmapData in lightmapTextures)
+			{
+				if (lightmapData.lightmapColor != null) 
+				{
+					var textureDetail = GetTextureDetail (lightmapData.lightmapColor);
+					
+					if (!ActiveTextures.Contains (textureDetail)) 
+						ActiveTextures.Add (textureDetail);
+				}
+				
+				if (lightmapData.lightmapDir != null) 
+				{
+					var textureDetail = GetTextureDetail (lightmapData.lightmapColor);
+					
+					if (!ActiveTextures.Contains (textureDetail)) 
+						ActiveTextures.Add (textureDetail);
+				}
+				
+				if (lightmapData.shadowMask != null) 
+				{
+					var textureDetail = GetTextureDetail (lightmapData.shadowMask);
+					
+					if (!ActiveTextures.Contains (textureDetail)) 
+						ActiveTextures.Add (textureDetail);
+				}
+			}
+		}
+		
 		if (IncludeGuiElements)
 		{
 			Graphic[] graphics = FindObjects<Graphic>();
@@ -716,6 +794,12 @@ public class ResourceChecker : EditorWindow {
 					ActiveMeshDetails.Add(tMeshDetails);
 				}
 				tMeshDetails.FoundInMeshFilters.Add(tMeshFilter);
+
+				if (GameObjectUtility.AreStaticEditorFlagsSet(tMeshFilter.gameObject, StaticEditorFlags.BatchingStatic))
+				{
+					tMeshDetails.StaticBatchingEnabled.Add(tMeshFilter.gameObject);
+				}
+				
 			} else if (tMesh == null && tMeshFilter.transform.GetComponent("TextContainer")== null) {
 				MissingGraphic tMissing = new MissingGraphic ();
 				tMissing.Object = tMeshFilter.transform;
@@ -916,6 +1000,9 @@ public class ResourceChecker : EditorWindow {
 		ActiveMeshDetails.Sort(delegate(MeshDetails details1, MeshDetails details2) { return details2.mesh.vertexCount - details1.mesh.vertexCount; });
 
 		collectedInPlayingMode = Application.isPlaying;
+		
+		// Sort by render queue
+		ActiveMaterials.Sort(MaterialSorter);
 	}
 
 	private void CheckButtonSpriteState(Button button, Sprite sprite) 
