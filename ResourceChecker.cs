@@ -1057,6 +1057,10 @@ public class ResourceChecker : EditorWindow {
 		{
 			if (!tTextureDetails.FoundInRenderers.Contains(renderer)) tTextureDetails.FoundInRenderers.Add(renderer);
 		}
+		foreach (Graphic graphic in tMaterialDetails.FoundInGraphics)
+		{
+			if (!tTextureDetails.FoundInGraphics.Contains(graphic)) tTextureDetails.FoundInGraphics.Add(graphic);
+		}
 		return tTextureDetails;
 	}
 
