@@ -1026,8 +1026,43 @@ public class ResourceChecker : EditorWindow {
         for (int sceneIdx = 0; sceneIdx < UnityEngine.SceneManagement.SceneManager.sceneCount; ++sceneIdx){
             allGo.AddRange( UnityEngine.SceneManagement.SceneManager.GetSceneAt(sceneIdx).GetRootGameObjects().ToArray() );
         }
+       
+		allGo.AddRange(GetDontDestroyOnLoadRoots());
         return allGo.ToArray();
 #endif
+    }
+    
+    private static List<GameObject> GetDontDestroyOnLoadRoots()
+    {
+	    List<GameObject> objs = new List<GameObject>();
+	    if (Application.isPlaying)
+	    {
+		    GameObject temp = null;
+		    try
+		    {
+			    temp = new GameObject();
+			    DontDestroyOnLoad(temp);
+			    UnityEngine.SceneManagement.Scene dontDestryScene = temp.scene;
+			    DestroyImmediate(temp);
+			    temp = null;
+
+			    if(dontDestryScene.IsValid())
+			    {
+				    objs =  dontDestryScene.GetRootGameObjects().ToList();
+			    }
+		    }
+		    catch (System.Exception e)
+		    {
+			    Debug.LogException(e);
+			    return null;
+		    }
+		    finally
+		    {
+			    if(temp != null)
+				    DestroyImmediate(temp);
+		    }
+	    }
+	    return objs;
     }
 
 	private T[] FindObjects<T>() where T : Object
