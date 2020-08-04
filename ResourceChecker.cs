@@ -1024,7 +1024,10 @@ public class ResourceChecker : EditorWindow {
 #else
         List<GameObject> allGo = new List<GameObject>();
         for (int sceneIdx = 0; sceneIdx < UnityEngine.SceneManagement.SceneManager.sceneCount; ++sceneIdx){
-            allGo.AddRange( UnityEngine.SceneManagement.SceneManager.GetSceneAt(sceneIdx).GetRootGameObjects().ToArray() );
+			//only add the scene to the list if it's currently loaded.
+			if (UnityEngine.SceneManagement.SceneManager.GetSceneAt(sceneIdx).isLoaded) {
+				allGo.AddRange(UnityEngine.SceneManagement.SceneManager.GetSceneAt(sceneIdx).GetRootGameObjects().ToArray());
+			}
         }
        
 		allGo.AddRange(GetDontDestroyOnLoadRoots());
