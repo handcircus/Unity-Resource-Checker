@@ -568,6 +568,9 @@ public class ResourceChecker : EditorWindow {
 				SelectObject (dMissing.Object, ctrlPressed);
 			GUILayout.Label ("missing ", GUILayout.Width(48));
 			switch (dMissing.type) {
+			case "lod":
+				GUI.color = new Color (defColor.r, defColor.b, 0.8f, 1.0f);
+				break;
 			case "mesh":
 				GUI.color = new Color (0.8f, 0.8f, defColor.b, 1.0f);
 				break;
@@ -853,6 +856,24 @@ public class ResourceChecker : EditorWindow {
 				thingsMissing = true;
 			}
 		}
+
+		LODGroup[] lodGroups = FindObjects<LODGroup>();
+
+		// Check if any LOD groups have no renderers
+		foreach (var group in lodGroups) {
+			var lods = group.GetLODs();
+			for (int i = 0, l = lods.Length; i < l; i++) {
+				if (lods[i].renderers.Length == 0) {
+					MissingGraphic tMissing = new MissingGraphic();
+					tMissing.Object = group.transform;
+					tMissing.type = "lod";
+					tMissing.name = group.transform.name;
+					MissingObjects.Add(tMissing);
+					thingsMissing = true;
+				}
+			}
+		}
+
 
 		if (IncludeSpriteAnimations)
 		{
